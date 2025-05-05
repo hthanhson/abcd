@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Nhận diện Khuôn mặt</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #a777e3, #6e8efb);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5d7de9, #9564d2);
+            transform: translateY(-2px);
+        }
+        .result-container {
+            display: none;
+            margin-top: 30px;
+        }
+        .face-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+        }
+        .face-card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .face-card:hover img {
+            transform: scale(1.05);
+        }
+        .face-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+        .face-card:hover .face-info {
+            transform: translateY(0);
+        }
+        .similarity-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .loading i {
+            font-size: 3rem;
+            color: #6e8efb;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header text-center">
+        <h1><i class="fas fa-user-check"></i> Hệ thống Nhận diện và Tìm kiếm Khuôn mặt</h1>
+        <p class="lead">Xây dựng, phân tích và tìm kiếm khuôn mặt dựa trên đặc trưng cảm xúc, tuổi và màu da</p>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-database me-2"></i> Xây dựng Cơ sở dữ liệu
+                    </div>
+                    <div class="card-body">
+                        <p>Xây dựng cơ sở dữ liệu đặc trưng khuôn mặt từ các ảnh hiện có. Quá trình này sẽ trích xuất thông tin về cảm xúc, tuổi và màu da từ mỗi khuôn mặt.</p>
+                        <button id="buildDatabaseBtn" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-cogs me-2"></i> Xây dựng CSDL
+                        </button>
+                        <div id="buildStatus" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <i class="fas fa-filter me-2"></i> Lọc Khuôn mặt theo Đặc trưng
+                    </div>
+                    <div class="card-body">
+                        <form id="filterForm">
+                            <div class="mb-3">
+                                <label for="emotion" class="form-label">Cảm xúc</label>
+                                <select id="emotion" class="form-select">
+                                    <option value="">Tất cả</option>
+                                    <option value="angry">Tức giận</option>
+                                    <option value="disgust">Ghê tởm</option>
+                                    <option value="fear">Sợ hãi</option>
+                                    <option value="happy">Vui vẻ</option>
+                                    <option value="sad">Buồn bã</option>
+                                    <option value="surprise">Ngạc nhiên</option>
+                                    <option value="neutral">Trung tính</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Độ tuổi</label>
+                                <div class="row">
+                                    <div class="col">
+                                        <input type="number" id="minAge" class="form-control" placeholder="Tuổi tối thiểu" min="0" max="100" value="0">
+                                    </div>
+                                    <div class="col">
+                                        <input type="number" id="maxAge" class="form-control" placeholder="Tuổi tối đa" min="0" max="100" value="100">
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search me-2"></i> Lọc khuôn mặt
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-search me-2"></i> Tìm kiếm Khuôn mặt
+                    </div>
+                    <div class="card-body">
+                        <p>Tải lên ảnh khuôn mặt để tìm kiếm 3 khuôn mặt tương tự nhất trong CSDL. Hệ thống sẽ phân tích và so sánh với các khuôn mặt đã lưu trữ.</p>
+                        <form id="searchForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="faceImage" class="form-label">Ảnh khuôn mặt</label>
+                                <input class="form-control" type="file" id="faceImage" name="file" accept="image/*">
+                            </div>
+                            <div class="mb-3">
+                                <div id="imagePreview" class="text-center" style="display: none;">
+                                    <img id="preview" src="#" alt="Ảnh đã chọn" style="max-width: 100%; max-height: 300px; border-radius: 10px;">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-search me-2"></i> Tìm kiếm
+                            </button>
+                        </form>
+                        
+                        <div id="loading" class="loading">
+                            <i class="fas fa-spinner"></i>
+                            <p>Đang xử lý...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div id="searchResults" class="result-container">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-list-ul me-2"></i> Kết quả Tìm kiếm
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header text-center">Ảnh tìm kiếm</div>
+                                <div class="card-body p-0">
+                                    <img id="queryImage" src="" class="img-fluid" style="width: 100%; height: 250px; object-fit: cover;">
+                                </div>
+                                <div class="card-footer" id="queryFeatures">
+                                    
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card h-100">
+                                <div class="card-header">Đặc trưng phát hiện</div>
+                                <div class="card-body" id="featureDetails">
+                                    <p>Phân tích đặc trưng từ khuôn mặt đã phát hiện:</p>
+                                    <ul class="list-group">
+                                        <li class="list-group-item" id="emotionFeature">Cảm xúc: <span class="badge bg-primary"></span></li>
+                                        <li class="list-group-item" id="ageFeature">Tuổi: <span class="badge bg-primary"></span></li>
+                                        <li class="list-group-item" id="skinColorFeature">Mã màu da: <span class="badge bg-primary"></span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4>Top 3 khuôn mặt tương tự nhất</h4>
+                    <div class="row" id="similarFaces"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Results -->
+        <div id="filterResults" class="result-container">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-list-ul me-2"></i> Kết quả Lọc
+                </div>
+                <div class="card-body">
+                    <div class="row" id="filteredFaces"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="mt-5 py-3 text-center text-muted">
+        <div class="container">
+            <p>Hệ thống Nhận diện và Tìm kiếm Khuôn mặt &copy; 2023</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Preview image before upload
+        document.getElementById('faceImage').addEventListener('change', function(e) {
+            const preview = document.getElementById('preview');
+            const file = e.target.files[0];
+            if (file) {
+                preview.src = URL.createObjectURL(file);
+                document.getElementById('imagePreview').style.display = 'block';
+            }
+        });
+
+        // Build database
+        document.getElementById('buildDatabaseBtn').addEventListener('click', function() {
+            const buildStatus = document.getElementById('buildStatus');
+            buildStatus.innerHTML = '<div class="alert alert-info">Đang xây dựng CSDL...</div>';
+            
+            fetch('/build-database', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    buildStatus.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                } else {
+                    buildStatus.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            })
+            .catch(error => {
+                buildStatus.innerHTML = `<div class="alert alert-danger">Lỗi: ${error}</div>`;
+            });
+        });
+
+        // Search form
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('filterResults').style.display = 'none';
+            
+            fetch('/search', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.status === 'success') {
+                    displaySearchResults(data);
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                alert('Error: ' + error);
+            });
+        });
+
+        // Filter form
+        document.getElementById('filterForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('emotion', document.getElementById('emotion').value);
+            formData.append('min_age', document.getElementById('minAge').value);
+            formData.append('max_age', document.getElementById('maxAge').value);
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('filterResults').style.display = 'none';
+            
+            fetch('/filter', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+                
+                if (data.status === 'success') {
+                    displayFilterResults(data);
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading').style.display = 'none';
+                alert('Error: ' + error);
+            });
+        });
+
+        function displaySearchResults(data) {
+            // Show results container
+            document.getElementById('searchResults').style.display = 'block';
+            
+            // Display query image
+            document.getElementById('queryImage').src = '/' + data.query_image;
+            
+            // Display query features
+            document.querySelector('#emotionFeature .badge').textContent = translateEmotion(data.query_features.emotion);
+            document.querySelector('#ageFeature .badge').textContent = data.query_features.age;
+            document.querySelector('#skinColorFeature .badge').textContent = data.query_features.skin_color.toFixed(2);
+            
+            // Display similar faces
+            const similarFacesContainer = document.getElementById('similarFaces');
+            similarFacesContainer.innerHTML = '';
+            
+            if (data.similar_faces.length === 0) {
+                similarFacesContainer.innerHTML = '<div class="col-12"><div class="alert alert-info">Không tìm thấy khuôn mặt tương tự.</div></div>';
+                return;
+            }
+            
+            data.similar_faces.forEach(face => {
+                const similarity = (face.similarity * 100).toFixed(2);
+                const faceHtml = `
+                    <div class="col-md-4 mb-3">
+                        <div class="face-card">
+                            <img src="/${face.image_path}" alt="Similar face">
+                            <div class="similarity-badge">${similarity}% tương đồng</div>
+                            <div class="face-info">
+                                <p><strong>Cảm xúc:</strong> ${translateEmotion(face.emotion)}</p>
+                                <p><strong>Tuổi:</strong> ${face.age}</p>
+                                <p><strong>Mã màu da:</strong> ${face.skin_color.toFixed(2)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                similarFacesContainer.innerHTML += faceHtml;
+            });
+        }
+
+        function displayFilterResults(data) {
+            // Show results container
+            document.getElementById('filterResults').style.display = 'block';
+            
+            // Display filtered faces
+            const filteredFacesContainer = document.getElementById('filteredFaces');
+            filteredFacesContainer.innerHTML = '';
+            
+            if (data.results.length === 0) {
+                filteredFacesContainer.innerHTML = '<div class="col-12"><div class="alert alert-info">Không tìm thấy khuôn mặt phù hợp với bộ lọc.</div></div>';
+                return;
+            }
+            
+            data.results.forEach(face => {
+                const faceHtml = `
+                    <div class="col-md-3 mb-3">
+                        <div class="face-card">
+                            <img src="/${face.image_path}" alt="Filtered face">
+                            <div class="face-info">
+                                <p><strong>Cảm xúc:</strong> ${translateEmotion(face.emotion)}</p>
+                                <p><strong>Tuổi:</strong> ${face.age}</p>
+                                <p><strong>Mã màu da:</strong> ${face.skin_color.toFixed(2)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                filteredFacesContainer.innerHTML += faceHtml;
+            });
+        }
+
+        function translateEmotion(emotion) {
+            const translations = {
+                'angry': 'Tức giận',
+                'disgust': 'Ghê tởm',
+                'fear': 'Sợ hãi',
+                'happy': 'Vui vẻ',
+                'sad': 'Buồn bã',
+                'surprise': 'Ngạc nhiên',
+                'neutral': 'Trung tính',
+                'unknown': 'Không xác định'
+            };
+            return translations[emotion] || emotion;
+        }
+    </script>
+</body>
+</html> 
