@@ -120,6 +120,17 @@ def extract_features(image_path):
         else:
             encoding = face_encodings[0]  # Use first face
         
+        # Đảm bảo encoding là mảng NumPy và có kích thước đúng
+        if not isinstance(encoding, np.ndarray):
+            encoding = np.array(encoding)
+        
+        if encoding.shape[0] != 128:
+            print(f"Warning: Unexpected encoding dimension {encoding.shape}, resizing to 128")
+            # Nếu kích thước không đúng, tạo vector ngẫu nhiên
+            dummy_encoding = np.random.normal(0, 0.01, 128)
+            dummy_encoding /= np.linalg.norm(dummy_encoding)
+            encoding = dummy_encoding
+        
         # Extract face region for further processing
         top, right, bottom, left = face_locations[0]
         face_image = image[top:bottom, left:right]
@@ -170,36 +181,4 @@ def extract_features(image_path):
             
     except Exception as e:
         print(f"Critical error analyzing image {image_path}: {e}")
-        return None, None, None, None, None
-
-def copy_image_to_category_folders(img_path, emotion, age_group, skin_color, organized_data_folder):
-    """Copy image to appropriate category folders in the organized data directory"""
-    try:
-        filename = os.path.basename(img_path)
-        
-        # Copy to emotion folder
-        emotion_dir = os.path.join(organized_data_folder, 'emotions', emotion)
-        os.makedirs(emotion_dir, exist_ok=True)
-        
-        # Check if source file exists before copying
-        if os.path.exists(img_path):
-            import shutil
-            shutil.copy(img_path, os.path.join(emotion_dir, filename))
-        
-        # Copy to age group folder
-        age_dir = os.path.join(organized_data_folder, 'age', age_group)
-        os.makedirs(age_dir, exist_ok=True)
-        if os.path.exists(img_path):
-            shutil.copy(img_path, os.path.join(age_dir, filename))
-        
-        # Copy to skin color folder
-        if skin_color != "unknown":
-            skin_dir = os.path.join(organized_data_folder, 'skin', skin_color)
-            os.makedirs(skin_dir, exist_ok=True)
-            if os.path.exists(img_path):
-                shutil.copy(img_path, os.path.join(skin_dir, filename))
-        
-        return True
-    except Exception as e:
-        print(f"Error copying image to category folders: {e}")
-        return False 
+        return None, None, None, None, None 

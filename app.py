@@ -5,22 +5,23 @@ import uuid
 import sys
 from werkzeug.utils import secure_filename
 from feature_extraction import extract_features
-from database import initialize_database, build_database, find_similar_faces, filter_database
+from database import initialize_database, build_database, find_similar_faces, filter_database, clear_database
+import mysql_setup  # Import module thiết lập MySQL
 
 app = Flask(__name__)
 
 # Configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['DATA_FOLDER'] = 'data_test'
-app.config['ORGANIZED_DATA_FOLDER'] = 'data'
-app.config['FEATURES_FILE'] = 'features.pkl'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 
 # Create necessary folders
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['ORGANIZED_DATA_FOLDER'], exist_ok=True)
 
-# Initialize features database
+# Khởi tạo MySQL trước khi chạy ứng dụng
+mysql_setup.create_database()
+
+# Initialize features database (now using MySQL)
 features_db = initialize_database()
 
 @app.route('/')
@@ -32,9 +33,7 @@ def index():
 def build_db_route():
     """Build or rebuild the feature database"""
     count = build_database(
-        app.config['DATA_FOLDER'], 
-        app.config['ORGANIZED_DATA_FOLDER'],
-        app.config['FEATURES_FILE']
+        app.config['DATA_FOLDER']
     )
     
     # Reload the database after building
@@ -45,6 +44,26 @@ def build_db_route():
         'status': 'success',
         'message': f'Database built with {count} faces'
     })
+
+@app.route('/clear-database', methods=['POST'])
+def clear_db_route():
+    """Xóa toàn bộ dữ liệu trong database"""
+    success = clear_database()
+    
+    # Khởi tạo lại connection
+    global features_db
+    features_db = initialize_database()
+    
+    if success:
+        return jsonify({
+            'status': 'success',
+            'message': 'Database has been cleared successfully'
+        })
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': 'Failed to clear database'
+        })
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -72,8 +91,15 @@ def search():
                 'message': 'No face detected in the uploaded image'
             })
         
-        # Find similar faces
-        similar_faces = find_similar_faces(encoding, features_db)
+        # Find similar faces - sử dụng cả 4 đặc trưng
+        similar_faces = find_similar_faces(
+            encoding,
+            top_n=3,
+            query_emotion=emotion,
+            query_age=age,
+            query_age_group=age_group,
+            query_skin_color=skin_color
+        )
         
         # Prepare response with base64 encoded images
         # Read the query image and convert to base64
@@ -131,7 +157,6 @@ def filter_images():
     
     # Filter database by criteria
     results = filter_database(
-        features_db, 
         emotion=emotion, 
         min_age=min_age, 
         max_age=max_age, 
@@ -146,71 +171,94 @@ def filter_images():
 
 @app.route('/api/category/<category_type>/<category_name>', methods=['GET'])
 def get_category_images(category_type, category_name):
-    """Return a list of images from the specified category folder"""
+    """Trả về danh sách ảnh theo loại đặc trưng (emotions, age, skin) từ MySQL"""
     if category_type not in ['emotions', 'age', 'skin']:
         return jsonify({
             'status': 'error',
             'message': 'Invalid category type'
         })
+
+    # Xác định trường và giá trị cần tìm trong SQL
+    field_map = {
+        'emotions': 'emotion_type',
+        'age': 'age_group',
+        'skin': 'skin_color'
+    }
     
-    category_path = os.path.join(app.config['ORGANIZED_DATA_FOLDER'], category_type, category_name)
-    if not os.path.exists(category_path):
+    table_map = {
+        'emotions': 'emotions',
+        'age': 'age_groups',
+        'skin': 'skin_colors'
+    }
+    
+    field = field_map[category_type]
+    table = table_map[category_type]
+    
+    # Import connection_pool từ database
+    from database import connection_pool
+    
+    if connection_pool is None:
         return jsonify({
             'status': 'error',
-            'message': f'Category folder {category_type}/{category_name} does not exist'
+            'message': 'Database connection not available'
         })
     
-    # Get all image files from the category
-    image_files = [f for f in os.listdir(category_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
-    
-    # Create full paths and extract feature information
-    images = []
-    for img_file in image_files:
-        img_path = os.path.join(category_path, img_file)
-        relative_path = os.path.join(category_type, category_name, img_file)
+    try:
+        conn = connection_pool.get_connection()
+        cursor = conn.cursor(dictionary=True)
         
-        # Look up the image in the features database
-        original_path = None
-        for i, path in enumerate(features_db['image_paths']):
-            if os.path.basename(path) == img_file:
-                original_path = path
-                images.append({
-                    'image_path': os.path.join('data', relative_path),
-                    'original_path': path,
-                    'emotion': features_db['emotions'][i],
-                    'age': features_db['ages'][i],
-                    'age_group': features_db['age_groups'][i],
-                    'skin_color': features_db['skin_colors'][i]
-                })
-                break
+        # Truy vấn dữ liệu từ MySQL
+        query = f"""
+            SELECT 
+                i.image_path,
+                e.emotion_type AS emotion,
+                a.estimated_age AS age,
+                ag.age_group,
+                s.skin_color
+            FROM images i
+            LEFT JOIN emotions e ON i.image_id = e.image_id
+            LEFT JOIN ages a ON i.image_id = a.image_id
+            LEFT JOIN age_groups ag ON i.image_id = ag.image_id
+            LEFT JOIN skin_colors s ON i.image_id = s.image_id
+            WHERE {field} = %s
+        """
         
-        # If not found in database, add with minimal info
-        if not original_path:
+        cursor.execute(query, (category_name,))
+        
+        results = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Chuyển đổi kết quả để phù hợp với định dạng cũ
+        images = []
+        for result in results:
             images.append({
-                'image_path': os.path.join('data', relative_path),
-                'original_path': None,
-                'emotion': category_name if category_type == 'emotions' else 'unknown',
-                'age': 0,
-                'age_group': category_name if category_type == 'age' else 'unknown',
-                'skin_color': category_name if category_type == 'skin' else 'unknown'
+                'image_path': result['image_path'],
+                'original_path': result['image_path'],
+                'emotion': result['emotion'],
+                'age': result['age'],
+                'age_group': result['age_group'],
+                'skin_color': result['skin_color']
             })
+        
+        return jsonify({
+            'status': 'success',
+            'category_type': category_type,
+            'category_name': category_name,
+            'count': len(images),
+            'images': images
+        })
     
-    return jsonify({
-        'status': 'success',
-        'category_type': category_type,
-        'category_name': category_name,
-        'count': len(images),
-        'images': images
-    })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'Error retrieving category images: {str(e)}'
+        })
 
 # Routes for serving static files
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory('static', filename)
-
-@app.route('/data/<path:filename>')
-def serve_data(filename):
-    return send_from_directory(app.config['ORGANIZED_DATA_FOLDER'], filename)
 
 @app.route('/uploads/<path:filename>')
 def serve_upload(filename):
@@ -234,20 +282,14 @@ def get_image(filename):
             app.config['DATA_FOLDER'], 
             filename.replace(app.config['DATA_FOLDER'] + '/', '')
         )
-    elif filename.startswith(app.config['ORGANIZED_DATA_FOLDER']):
-        return send_from_directory(
-            app.config['ORGANIZED_DATA_FOLDER'],
-            filename.replace(app.config['ORGANIZED_DATA_FOLDER'] + '/', '')
-        )
     return send_from_directory(os.path.dirname(filename), os.path.basename(filename))
 
 if __name__ == '__main__':
-    # Check if we should just build the database
-    if len(sys.argv) > 1 and sys.argv[1] == 'build_db':
-        build_database(
-            app.config['DATA_FOLDER'], 
-            app.config['ORGANIZED_DATA_FOLDER'],
-            app.config['FEATURES_FILE']
-        )
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'build_db':
+            # Chạy build database
+            build_database(
+                app.config['DATA_FOLDER']
+            )
     else:
         app.run(debug=True) 

@@ -514,8 +514,11 @@
                             </div>
                             <div class="card-body">
                                 <p>Xây dựng cơ sở dữ liệu đặc trưng khuôn mặt từ các ảnh hiện có. Quá trình này sẽ trích xuất thông tin về cảm xúc, tuổi và màu da từ mỗi khuôn mặt.</p>
-                                <button id="buildDatabaseBtn" class="btn btn-primary btn-lg w-100">
+                                <button id="buildDatabaseBtn" class="btn btn-primary btn-lg w-100 mb-2">
                                     <i class="fas fa-cogs me-2"></i> Xây dựng CSDL
+                                </button>
+                                <button id="clearDatabaseBtn" class="btn btn-danger btn-lg w-100">
+                                    <i class="fas fa-trash-alt me-2"></i> Xóa CSDL
                                 </button>
                                 <div id="buildStatus" class="mt-3"></div>
                             </div>
@@ -785,6 +788,7 @@
             
             // Handle buildDatabase button click
             const buildDatabaseBtn = document.getElementById('buildDatabaseBtn');
+            const clearDatabaseBtn = document.getElementById('clearDatabaseBtn');
             const buildStatus = document.getElementById('buildStatus');
             
             buildDatabaseBtn.addEventListener('click', function() {
@@ -816,6 +820,44 @@
                     // Re-enable button
                     buildDatabaseBtn.disabled = false;
                     buildDatabaseBtn.innerHTML = '<i class="fas fa-cogs me-2"></i> Xây dựng CSDL';
+                });
+            });
+            
+            // Handle clearDatabase button click
+            clearDatabaseBtn.addEventListener('click', function() {
+                // Hiển thị thông báo xác nhận
+                if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trong cơ sở dữ liệu? Hành động này không thể hoàn tác.')) {
+                    return; // Nếu người dùng không xác nhận, dừng xử lý
+                }
+                
+                // Disable button and show processing state
+                clearDatabaseBtn.disabled = true;
+                clearDatabaseBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang xóa...';
+                buildStatus.innerHTML = '<div class="alert alert-info">Đang xóa cơ sở dữ liệu, vui lòng đợi...</div>';
+                
+                // Send request to server
+                fetch('/clear-database', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        buildStatus.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                    } else {
+                        buildStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Có lỗi xảy ra'}</div>`;
+                    }
+                    
+                    // Re-enable button
+                    clearDatabaseBtn.disabled = false;
+                    clearDatabaseBtn.innerHTML = '<i class="fas fa-trash-alt me-2"></i> Xóa CSDL';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    buildStatus.innerHTML = '<div class="alert alert-danger">Đã xảy ra lỗi khi xóa cơ sở dữ liệu. Vui lòng thử lại sau.</div>';
+                    
+                    // Re-enable button
+                    clearDatabaseBtn.disabled = false;
+                    clearDatabaseBtn.innerHTML = '<i class="fas fa-trash-alt me-2"></i> Xóa CSDL';
                 });
             });
             
@@ -1080,51 +1122,70 @@
                 
                 // Card body
                 const similarBody = document.createElement('div');
-                similarBody.className = 'card-body text-center';
+                similarBody.className = 'card-body';
                 
-                // Similar face image
-                const similarImage = document.createElement('img');
-                similarImage.src = 'data:image/jpeg;base64,' + result.image;
-                similarImage.alt = `Khuôn mặt tương tự #${index + 1}`;
-                similarImage.className = 'img-fluid mb-3';
-                similarImage.style.width = '224px';
-                similarImage.style.height = '224px';
-                similarImage.style.objectFit = 'cover';
+                // Image
+                const similarImg = document.createElement('img');
+                similarImg.src = 'data:image/jpeg;base64,' + result.image;
+                similarImg.alt = 'Khuôn mặt tương tự';
+                similarImg.className = 'img-fluid mb-3';
+                similarImg.style.width = '224px';
+                similarImg.style.height = '224px';
+                similarImg.style.objectFit = 'cover';
+                similarBody.appendChild(similarImg);
                 
-                similarBody.appendChild(similarImage);
-                
-                // Features list
+                // Create features list
                 const featuresList = document.createElement('ul');
                 featuresList.className = 'list-group list-group-flush';
                 
-                // Age item
-                const ageItem = document.createElement('li');
-                ageItem.className = 'list-group-item';
-                ageItem.textContent = `Tuổi: ${result.features.age || 'Không xác định'}`;
-                featuresList.appendChild(ageItem);
+                // Add features
+                const emotion = document.createElement('li');
+                emotion.className = 'list-group-item';
+                emotion.innerHTML = `<strong>Cảm xúc:</strong> ${translateEmotion(result.features.emotion)}`;
+                featuresList.appendChild(emotion);
                 
-                // Age group item
-                const ageGroupItem = document.createElement('li');
-                ageGroupItem.className = 'list-group-item';
-                ageGroupItem.textContent = `Nhóm tuổi: ${translateAgeGroup(result.features.age_group) || 'Không xác định'}`;
-                featuresList.appendChild(ageGroupItem);
+                const age = document.createElement('li');
+                age.className = 'list-group-item';
+                age.innerHTML = `<strong>Tuổi:</strong> ${result.features.age}`;
+                featuresList.appendChild(age);
                 
-                // Emotion item
-                const emotionItem = document.createElement('li');
-                emotionItem.className = 'list-group-item';
-                emotionItem.textContent = `Cảm xúc: ${translateEmotion(result.features.emotion) || 'Không xác định'}`;
-                featuresList.appendChild(emotionItem);
+                const ageGroup = document.createElement('li');
+                ageGroup.className = 'list-group-item';
+                ageGroup.innerHTML = `<strong>Nhóm tuổi:</strong> ${translateAgeGroup(result.features.age_group)}`;
+                featuresList.appendChild(ageGroup);
                 
-                // Skin color item
-                const skinColorItem = document.createElement('li');
-                skinColorItem.className = 'list-group-item';
-                skinColorItem.textContent = `Màu da: ${translateSkinColor(result.features.skin_color) || 'Không xác định'}`;
-                featuresList.appendChild(skinColorItem);
+                const skinColor = document.createElement('li');
+                skinColor.className = 'list-group-item';
+                skinColor.innerHTML = `<strong>Màu da:</strong> ${translateSkinColor(result.features.skin_color)}`;
+                featuresList.appendChild(skinColor);
                 
-                // Add components to card
+                // Add features to card
                 similarCard.appendChild(similarHeader);
                 similarCard.appendChild(similarBody);
                 similarCard.appendChild(featuresList);
+                
+                // Thêm thông tin chi tiết về độ tương đồng
+                const similarityDetails = document.createElement('div');
+                similarityDetails.className = 'card-footer mt-3';
+                similarityDetails.innerHTML = `
+                    <div class="similarity-details">
+                        <strong>Độ tương đồng dựa trên:</strong>
+                        <ul class="list-unstyled mt-2">
+                            <li><span class="badge bg-primary">50%</span> Đặc trưng khuôn mặt</li>
+                            <li><span class="badge ${result.features.emotion === data.query_features.emotion ? 'bg-success' : 'bg-secondary'}">20%</span> 
+                                Cảm xúc: ${result.features.emotion === data.query_features.emotion ? 'Trùng khớp' : 'Khác biệt'}</li>
+                            <li><span class="badge bg-info">15%</span> 
+                                Tuổi: Chênh lệch ${Math.abs(parseFloat(result.features.age) - parseFloat(data.query_features.age)).toFixed(1)} năm</li>
+                            <li><span class="badge ${result.features.age_group === data.query_features.age_group ? 'bg-success' : 'bg-secondary'}">10%</span> 
+                                Nhóm tuổi: ${result.features.age_group === data.query_features.age_group ? 'Trùng khớp' : 'Khác biệt'}</li>
+                            <li><span class="badge ${result.features.skin_color === data.query_features.skin_color ? 'bg-success' : 'bg-secondary'}">5%</span> 
+                                Màu da: ${result.features.skin_color === data.query_features.skin_color ? 'Trùng khớp' : 'Khác biệt'}</li>
+                        </ul>
+                    </div>
+                `;
+                
+                // Add similarity details to card
+                similarCard.appendChild(similarityDetails);
                 
                 // Add card to column
                 similarCol.appendChild(similarCard);
