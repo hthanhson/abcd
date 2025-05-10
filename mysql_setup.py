@@ -53,10 +53,9 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS face_encodings (
             encoding_id INT AUTO_INCREMENT PRIMARY KEY,
             image_id INT NOT NULL,
-            dimension INT NOT NULL,
-            value FLOAT NOT NULL,
+            encoding_data TEXT NOT NULL,
             FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id, dimension)
+            INDEX (image_id)
         )
         """)
         

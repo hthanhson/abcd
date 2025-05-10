@@ -63,7 +63,7 @@ def clear_db_route():
         return jsonify({
             'status': 'error',
             'message': 'Failed to clear database'
-        })
+    })
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -177,7 +177,7 @@ def get_category_images(category_type, category_name):
             'status': 'error',
             'message': 'Invalid category type'
         })
-
+    
     # Xác định trường và giá trị cần tìm trong SQL
     field_map = {
         'emotions': 'emotion_type',
@@ -245,14 +245,13 @@ def get_category_images(category_type, category_name):
             'status': 'success',
             'category_type': category_type,
             'category_name': category_name,
-            'count': len(images),
             'images': images
         })
-    
     except Exception as e:
+        print(f"Error in get_category_images: {str(e)}")
         return jsonify({
             'status': 'error',
-            'message': f'Error retrieving category images: {str(e)}'
+            'message': f'Error retrieving images: {str(e)}'
         })
 
 # Routes for serving static files

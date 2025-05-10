@@ -7,7 +7,10 @@ from age_estimation import adjust_age_estimation
 from skin_classification import classify_skin_color
 from utils import categorize_age
 import os
-
+height, width = 224, 224  
+min_dimension = min(height, width) 
+min_face_size = int(min_dimension * 0.45)
+max_face_size = int(min_dimension * 0.60)
 def extract_features(image_path):
     """Extract facial features: encoding, emotion, age, and skin color with improved accuracy"""
     try:
@@ -41,7 +44,7 @@ def extract_features(image_path):
                 denoised, 
                 scaleFactor=1.1, 
                 minNeighbors=3, 
-                minSize=(50, 50),
+                minSize=(60,60),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
             
@@ -58,7 +61,7 @@ def extract_features(image_path):
                 denoised, 
                 scaleFactor=1.05, 
                 minNeighbors=2, 
-                minSize=(30, 30),
+                minSize=(40,40),
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
             

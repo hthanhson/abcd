@@ -2,6 +2,7 @@ import os
 import face_recognition
 import numpy as np
 import mysql.connector
+import json
 from mysql.connector import pooling, Error
 from db_config import MYSQL_CONFIG
 from feature_extraction import extract_features
@@ -78,12 +79,14 @@ def add_image_to_database(image_path, encoding, emotion, age, age_group, skin_co
         # Xóa encodings cũ nếu có
         cursor.execute("DELETE FROM face_encodings WHERE image_id = %s", (image_id,))
         
-        # Thêm encodings mới
-        for i, value in enumerate(encoding):
-            cursor.execute(
-                "INSERT INTO face_encodings (image_id, dimension, value) VALUES (%s, %s, %s)",
-                (image_id, i, float(value))
-            )
+        # Chuyển encoding thành chuỗi JSON
+        encoding_json = json.dumps(encoding.tolist() if isinstance(encoding, np.ndarray) else encoding)
+        
+        # Thêm encoding mới dưới dạng chuỗi JSON
+        cursor.execute(
+            "INSERT INTO face_encodings (image_id, encoding_data) VALUES (%s, %s)",
+            (image_id, encoding_json)
+        )
         
         # 3. Thêm cảm xúc - xóa cũ nếu có
         cursor.execute("DELETE FROM emotions WHERE image_id = %s", (image_id,))
@@ -140,33 +143,24 @@ def get_all_encodings():
         conn = connection_pool.get_connection()
         cursor = conn.cursor(dictionary=True)
         
-        # Lấy danh sách tất cả các image_id
-        cursor.execute("SELECT DISTINCT image_id FROM face_encodings")
-        image_ids = [row['image_id'] for row in cursor.fetchall()]
+        # Lấy cả image_id và encoding_data từ bảng face_encodings
+        cursor.execute("""
+            SELECT fe.image_id, fe.encoding_data, i.image_path 
+            FROM face_encodings fe
+            JOIN images i ON fe.image_id = i.image_id
+        """)
         
+        rows = cursor.fetchall()
         encodings = []
         image_paths = []
         
-        # Lấy encodings cho mỗi image_id
-        for image_id in image_ids:
-            # Lấy image_path
-            cursor.execute("SELECT image_path FROM images WHERE image_id = %s", (image_id,))
-            image_path = cursor.fetchone()['image_path']
-            
-            # Lấy encoding values
-            cursor.execute(
-                "SELECT dimension, value FROM face_encodings WHERE image_id = %s ORDER BY dimension",
-                (image_id,)
-            )
-            encoding_values = cursor.fetchall()
-            
-            # Tạo vector 128 chiều
-            encoding = [0.0] * 128
-            for row in encoding_values:
-                encoding[row['dimension']] = row['value']
+        for row in rows:
+            # Chuyển chuỗi JSON thành mảng NumPy
+            encoding_list = json.loads(row['encoding_data'])
+            encoding = np.array(encoding_list)
             
             encodings.append(encoding)
-            image_paths.append(image_path)
+            image_paths.append(row['image_path'])
         
         cursor.close()
         conn.close()
