@@ -8,36 +8,143 @@ from db_config import MYSQL_CONFIG
 from feature_extraction import extract_features
 from age_estimation import calibrate_age_estimation
 
-# Tạo connection pool
-try:
-    connection_pool = pooling.MySQLConnectionPool(
-        pool_name="face_pool",
-        pool_size=5,
-        **MYSQL_CONFIG
-    )
-    print("MySQL connection pool created successfully")
-except Error as e:
-    print(f"Error creating connection pool: {e}")
-    connection_pool = None
+class DatabaseManager:
+    """
+    Database manager class để quản lý kết nối
+    """
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        """Singleton pattern để đảm bảo chỉ có một instance"""
+        if cls._instance is None:
+            cls._instance = DatabaseManager()
+        return cls._instance
+    
+    def __init__(self):
+        """Khởi tạo connection pool"""
+        try:
+            self.connection_pool = pooling.MySQLConnectionPool(
+                pool_name="face_pool",
+                pool_size=5,
+                **MYSQL_CONFIG
+            )
+            print("MySQL connection pool created successfully")
+        except Error as e:
+            print(f"Error creating connection pool: {e}")
+            self.connection_pool = None
+    
+    def execute_query(self, query, params=None, fetch_one=False, fetch_all=False, dictionary=True):
+        """
+        Thực thi truy vấn với xử lý kết nối tự động
+        
+        Args:
+            query (str): Truy vấn SQL cần thực thi
+            params (tuple/list/dict): Tham số cho truy vấn
+            fetch_one (bool): Lấy một kết quả
+            fetch_all (bool): Lấy tất cả kết quả
+            dictionary (bool): Trả về kết quả dưới dạng dictionary
+            
+        Returns:
+            Kết quả truy vấn tùy theo fetch_one, fetch_all, hoặc lastrowid cho thao tác INSERT
+        """
+        if self.connection_pool is None:
+            print("Database connection pool not initialized")
+            return None
+            
+        conn = None
+        try:
+            conn = self.connection_pool.get_connection()
+            cursor = conn.cursor(dictionary=dictionary)
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+                
+            result = None
+            
+            if fetch_one:
+                result = cursor.fetchone()
+            elif fetch_all:
+                result = cursor.fetchall()
+            else:
+                # For INSERT operations, return last inserted ID
+                conn.commit()
+                result = cursor.lastrowid
+                
+            cursor.close()
+            conn.close()
+            return result
+            
+        except Error as e:
+            print(f"Database error: {e}")
+            if conn:
+                try:
+                    conn.rollback()
+                except:
+                    pass
+                cursor.close()
+                conn.close()
+            return None
+    
+    def execute_transaction(self, queries_with_params):
+        """
+        Thực thi nhiều truy vấn trong một giao dịch
+        
+        Args:
+            queries_with_params (list): Danh sách các tuple (query, params)
+            
+        Returns:
+            bool: Thành công hay thất bại
+        """
+        if self.connection_pool is None:
+            print("Database connection pool not initialized")
+            return False
+            
+        conn = None
+        try:
+            conn = self.connection_pool.get_connection()
+            cursor = conn.cursor()
+            
+            for query, params in queries_with_params:
+                cursor.execute(query, params)
+                
+            conn.commit()
+            cursor.close()
+            conn.close()
+            return True
+            
+        except Error as e:
+            print(f"Transaction error: {e}")
+            if conn:
+                try:
+                    conn.rollback()
+                except:
+                    pass
+                cursor.close()
+                conn.close()
+            return False
+    
+    def get_image_count(self):
+        """Lấy số lượng ảnh trong database"""
+        result = self.execute_query(
+            "SELECT COUNT(*) as count FROM images",
+            fetch_one=True
+        )
+        return result['count'] if result else 0
+
+# Tạo instance toàn cục
+db_manager = DatabaseManager.get_instance()
 
 def initialize_database():
     """Kết nối đến cơ sở dữ liệu MySQL và kiểm tra kết nối"""
-    if connection_pool is None:
+    if db_manager.connection_pool is None:
         print("Connection pool not initialized. Check your MySQL configuration.")
         return None
     
     try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Kiểm tra kết nối
-        cursor.execute("SELECT COUNT(*) as count FROM images")
-        result = cursor.fetchone()
-        image_count = result['count'] if result else 0
-        
-        cursor.close()
-        conn.close()
-        
+        image_count = db_manager.get_image_count()
         print(f"MySQL database connected successfully. {image_count} images in database.")
         
         # Để tương thích với code cũ
@@ -49,18 +156,14 @@ def initialize_database():
 
 def add_image_to_database(image_path, encoding, emotion, age, age_group, skin_color, emotion_confidence=1.0):
     """Thêm ảnh và đặc trưng vào cơ sở dữ liệu MySQL"""
-    if connection_pool is None:
+    if db_manager.connection_pool is None:
         print("Connection pool not initialized")
         return None
     
-    conn = None
     try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor()
-        
         # 1. Thêm ảnh vào bảng images
         image_name = os.path.basename(image_path)
-        cursor.execute(
+        image_id = db_manager.execute_query(
             """
             INSERT INTO images (image_name, image_path) 
             VALUES (%s, %s) 
@@ -69,88 +172,78 @@ def add_image_to_database(image_path, encoding, emotion, age, age_group, skin_co
             (image_name, image_path)
         )
         
-        # Lấy ID của ảnh vừa thêm
-        image_id = cursor.lastrowid
+        # Nếu không có image_id, lấy id của ảnh đã tồn tại
         if not image_id:
-            cursor.execute("SELECT image_id FROM images WHERE image_path = %s", (image_path,))
-            image_id = cursor.fetchone()[0]
+            result = db_manager.execute_query(
+                "SELECT image_id FROM images WHERE image_path = %s",
+                (image_path,),
+                fetch_one=True
+            )
+            image_id = result['image_id'] if result else None
             
-        # 2. Thêm face encoding
-        # Xóa encodings cũ nếu có
-        cursor.execute("DELETE FROM face_encodings WHERE image_id = %s", (image_id,))
-        
-        # Chuyển encoding thành chuỗi JSON
+        if not image_id:
+            print(f"Could not insert or retrieve image ID for {image_path}")
+            return None
+            
+        # Chuẩn bị queries cho transaction
         encoding_json = json.dumps(encoding.tolist() if isinstance(encoding, np.ndarray) else encoding)
         
-        # Thêm encoding mới dưới dạng chuỗi JSON
-        cursor.execute(
-            "INSERT INTO face_encodings (image_id, encoding_data) VALUES (%s, %s)",
-            (image_id, encoding_json)
-        )
+        queries = [
+            # Xóa face encodings cũ
+            ("DELETE FROM face_encodings WHERE image_id = %s", (image_id,)),
+            # Thêm encoding mới
+            ("INSERT INTO face_encodings (image_id, encoding_data) VALUES (%s, %s)", (image_id, encoding_json)),
+            # Xóa cảm xúc cũ
+            ("DELETE FROM emotions WHERE image_id = %s", (image_id,)),
+            # Thêm cảm xúc mới
+            ("INSERT INTO emotions (image_id, emotion_type, confidence_value) VALUES (%s, %s, %s)", (image_id, emotion, emotion_confidence)),
+            # Xóa tuổi cũ
+            ("DELETE FROM ages WHERE image_id = %s", (image_id,)),
+            # Thêm tuổi mới
+            ("INSERT INTO ages (image_id, estimated_age, confidence_value) VALUES (%s, %s, %s)", (image_id, float(age), 1.0)),
+            # Xóa nhóm tuổi cũ
+            ("DELETE FROM age_groups WHERE image_id = %s", (image_id,)),
+            # Thêm nhóm tuổi mới
+            ("INSERT INTO age_groups (image_id, age_group, confidence_value) VALUES (%s, %s, %s)", (image_id, age_group, 1.0)),
+            # Xóa màu da cũ
+            ("DELETE FROM skin_colors WHERE image_id = %s", (image_id,)),
+            # Thêm màu da mới
+            ("INSERT INTO skin_colors (image_id, skin_color, confidence_value) VALUES (%s, %s, %s)", (image_id, skin_color, 1.0))
+        ]
         
-        # 3. Thêm cảm xúc - xóa cũ nếu có
-        cursor.execute("DELETE FROM emotions WHERE image_id = %s", (image_id,))
-        cursor.execute(
-            "INSERT INTO emotions (image_id, emotion_type, confidence_value) VALUES (%s, %s, %s)",
-            (image_id, emotion, emotion_confidence)
-        )
+        # Thực hiện transaction
+        success = db_manager.execute_transaction(queries)
         
-        # 4. Thêm tuổi - xóa cũ nếu có
-        cursor.execute("DELETE FROM ages WHERE image_id = %s", (image_id,))
-        cursor.execute(
-            "INSERT INTO ages (image_id, estimated_age, confidence_value) VALUES (%s, %s, %s)",
-            (image_id, float(age), 1.0)
-        )
+        if success:
+            print(f"Image {image_name} added to database with ID {image_id}")
+            return image_id
+        else:
+            print(f"Failed to add image {image_name} to database")
+            return None
         
-        # 5. Thêm nhóm tuổi - xóa cũ nếu có
-        cursor.execute("DELETE FROM age_groups WHERE image_id = %s", (image_id,))
-        cursor.execute(
-            "INSERT INTO age_groups (image_id, age_group, confidence_value) VALUES (%s, %s, %s)",
-            (image_id, age_group, 1.0)
-        )
-        
-        # 6. Thêm màu da - xóa cũ nếu có
-        cursor.execute("DELETE FROM skin_colors WHERE image_id = %s", (image_id,))
-        cursor.execute(
-            "INSERT INTO skin_colors (image_id, skin_color, confidence_value) VALUES (%s, %s, %s)",
-            (image_id, skin_color, 1.0)
-        )
-        
-        conn.commit()
-        print(f"Image {image_name} added to database with ID {image_id}")
-        
-        cursor.close()
-        conn.close()
-        return image_id
-        
-    except Error as e:
+    except Exception as e:
         print(f"Error adding image to database: {e}")
-        if conn:
-            try:
-                conn.rollback()
-            except:
-                pass
-            cursor.close()
-            conn.close()
         return None
 
 def get_all_encodings():
     """Lấy tất cả encodings từ cơ sở dữ liệu"""
-    if connection_pool is None:
+    if db_manager.connection_pool is None:
         return [], []
     
     try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
         # Lấy cả image_id và encoding_data từ bảng face_encodings
-        cursor.execute("""
+        rows = db_manager.execute_query(
+            """
             SELECT fe.image_id, fe.encoding_data, i.image_path 
             FROM face_encodings fe
             JOIN images i ON fe.image_id = i.image_id
-        """)
+            """,
+            fetch_all=True
+        )
         
-        rows = cursor.fetchall()
+        if not rows:
+            return [], []
+            
         encodings = []
         image_paths = []
         
@@ -162,18 +255,15 @@ def get_all_encodings():
             encodings.append(encoding)
             image_paths.append(row['image_path'])
         
-        cursor.close()
-        conn.close()
-        
         return np.array(encodings), image_paths
     
-    except Error as e:
+    except Exception as e:
         print(f"Error getting encodings: {e}")
         return [], []
 
 def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=None, query_age_group=None, query_skin_color=None):
     """Tìm top N khuôn mặt tương tự dựa trên encoding và các đặc trưng khác"""
-    if connection_pool is None:
+    if db_manager.connection_pool is None:
         return []
     
     try:
@@ -207,9 +297,6 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
         # Sắp xếp và lấy các ứng viên tiềm năng
         candidate_indices = np.argsort(face_distances)[:candidates_count]
         
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
         # Danh sách ứng viên với thông tin chi tiết
         candidates = []
         
@@ -218,7 +305,7 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
             face_similarity = 1 - face_distances[i]  # Chuyển khoảng cách thành độ tương tự
             
             # Lấy thông tin chi tiết của ảnh
-            cursor.execute(
+            face_info = db_manager.execute_query(
                 """
                 SELECT 
                     i.image_path,
@@ -233,41 +320,41 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
                 LEFT JOIN skin_colors s ON i.image_id = s.image_id
                 WHERE i.image_path = %s
                 """,
-                (image_path,)
+                (image_path,),
+                fetch_one=True
             )
             
-            face_info = cursor.fetchone()
             if face_info:
                 # Tính toán các điểm tương đồng cho từng đặc trưng
                 
-                # 1. Điểm cơ bản từ face embedding (0-1)
+                # 1. Điểm cơ bản từ face embedding (0-1) - tăng trọng số từ 50% lên 55%
                 base_score = face_similarity
                 
-                # 2. Điểm cảm xúc - nếu cùng cảm xúc thì có 0.2 điểm
+                # 2. Điểm cảm xúc - nếu cùng cảm xúc thì có 0.25 điểm (tăng từ 0.2)
                 emotion_score = 0.0
                 if query_emotion and face_info['emotion'] == query_emotion:
-                    emotion_score = 0.2
+                    emotion_score = 0.25
                 
-                # 3. Điểm độ tuổi - dựa trên khoảng cách tuổi tương đối
+                # 3. Điểm độ tuổi - dựa trên khoảng cách tuổi tương đối - giảm từ 20% xuống 15%
                 age_score = 0.0
                 if query_age is not None and face_info['age'] is not None:
                     age_diff = abs(float(face_info['age']) - float(query_age))
                     max_age_diff = 50.0  # Giả sử chênh lệch tuổi tối đa
                     age_score = max(0, 0.15 * (1 - age_diff / max_age_diff))
                 
-                # 4. Điểm nhóm tuổi - nếu cùng nhóm tuổi thì có 0.1 điểm
-                age_group_score = 0.0
-                if query_age_group and face_info['age_group'] == query_age_group:
-                    age_group_score = 0.1
+                # Bỏ phần điểm nhóm tuổi (age_group_score)
                 
-                # 5. Điểm màu da - nếu cùng màu da thì có 0.05 điểm
+                # 4. Điểm màu da - nếu cùng màu da thì có 0.05 điểm
                 skin_score = 0.0
                 if query_skin_color and face_info['skin_color'] == query_skin_color:
-                    skin_score = 0.05
+                    skin_score = 0.1
                 
-                # Tính tổng điểm - face embedding vẫn chiếm trọng số lớn nhất (50%)
-                # Các đặc trưng khác chiếm 50% còn lại
-                total_score = base_score * 0.5 + emotion_score + age_score + age_group_score + skin_score
+                # Tính tổng điểm - phân bổ lại trọng số:
+                # - Face embedding: 50%
+                # - Cảm xúc: 25%
+                # - Độ tuổi: 15% (giảm để tổng đúng 100%)
+                # - Màu da: 10%
+                total_score = base_score * 0.50 + emotion_score + age_score + skin_score
                 
                 candidates.append({
                     'image_path': face_info['image_path'],
@@ -278,9 +365,6 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
                     'age_group': face_info['age_group'],
                     'skin_color': face_info['skin_color']
                 })
-        
-        cursor.close()
-        conn.close()
         
         # Sắp xếp lại theo điểm tổng hợp và chọn top_n kết quả
         candidates.sort(key=lambda x: x['total_score'], reverse=True)
@@ -293,62 +377,8 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
         
         return results
     
-    except Error as e:
+    except Exception as e:
         print(f"Error finding similar faces: {e}")
-        return []
-
-def filter_database(emotion=None, min_age=0, max_age=100, age_group=None, skin_color=None):
-    """Lọc cơ sở dữ liệu theo các tiêu chí"""
-    if connection_pool is None:
-        return []
-    
-    try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                i.image_path,
-                e.emotion_type AS emotion,
-                a.estimated_age AS age,
-                ag.age_group,
-                s.skin_color
-            FROM images i
-            LEFT JOIN emotions e ON i.image_id = e.image_id
-            LEFT JOIN ages a ON i.image_id = a.image_id
-            LEFT JOIN age_groups ag ON i.image_id = ag.image_id
-            LEFT JOIN skin_colors s ON i.image_id = s.image_id
-            WHERE 1=1
-        """
-        
-        params = []
-        
-        if emotion and emotion != '':
-            query += " AND e.emotion_type = %s"
-            params.append(emotion)
-        
-        if min_age is not None and max_age is not None:
-            query += " AND a.estimated_age BETWEEN %s AND %s"
-            params.append(min_age)
-            params.append(max_age)
-        
-        if age_group and age_group != '':
-            query += " AND ag.age_group = %s"
-            params.append(age_group)
-        
-        if skin_color and skin_color != '':
-            query += " AND s.skin_color = %s"
-            params.append(skin_color)
-        
-        cursor.execute(query, params)
-        results = cursor.fetchall()
-        
-        cursor.close()
-        conn.close()
-        return results
-    
-    except Error as e:
-        print(f"Error filtering database: {e}")
         return []
 
 def build_database(data_folder):
@@ -383,7 +413,7 @@ def build_database(data_folder):
 
 def clear_database():
     """Xóa toàn bộ dữ liệu trong tất cả các bảng"""
-    if connection_pool is None:
+    if db_manager.connection_pool is None:
         print("Connection pool not initialized")
         return False
     
@@ -398,33 +428,22 @@ def clear_database():
     ]
     
     try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor()
-        
         # Tạm thời tắt foreign key constraints để xóa dữ liệu
-        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        db_manager.execute_query("SET FOREIGN_KEY_CHECKS = 0")
         
         # Xóa dữ liệu từ tất cả các bảng
         for table in tables:
-            cursor.execute(f"TRUNCATE TABLE {table}")
+            db_manager.execute_query(f"TRUNCATE TABLE {table}")
             print(f"Cleared data from table: {table}")
         
         # Bật lại foreign key constraints
-        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
-        
-        cursor.close()
-        conn.close()
+        db_manager.execute_query("SET FOREIGN_KEY_CHECKS = 1")
         
         print("All data has been cleared from the database")
         return True
         
-    except Error as e:
+    except Exception as e:
+        # Đảm bảo bật lại foreign key constraints nếu có lỗi
+        db_manager.execute_query("SET FOREIGN_KEY_CHECKS = 1")
         print(f"Error clearing database: {e}")
-        if conn:
-            try:
-                # Bật lại foreign key constraints nếu có lỗi
-                cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
-                conn.close()
-            except:
-                pass
         return False 

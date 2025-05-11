@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Các đặc trưng khuôn mặt trong Database</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .feature-card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+            overflow: hidden;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .feature-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+        .feature-details {
+            padding: 15px;
+        }
+        .feature-label {
+            font-weight: bold;
+            color: #6e8efb;
+        }
+        .filters {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-filter {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .btn-filter:hover {
+            background: linear-gradient(135deg, #5d7de9, #9564d2);
+        }
+    </style>
+</head>
+<body>
+    <div class="header text-center">
+
+    </div>
+
+    <div class="container">
+        <!-- Bộ lọc -->
+        <div class="filters">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="emotionFilter" class="form-label">Lọc theo cảm xúc:</label>
+                    <select id="emotionFilter" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option value="happy">Vui vẻ</option>
+                        <option value="sad">Buồn</option>
+                        <option value="angry">Giận dữ</option>
+                        <option value="fear">Sợ hãi</option>
+                        <option value="disgust">Ghê tởm</option>
+                        <option value="surprise">Ngạc nhiên</option>
+                        <option value="neutral">Trung tính</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="ageFilter" class="form-label">Lọc theo độ tuổi:</label>
+                    <select id="ageFilter" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option value="15-20">15-20</option>
+                        <option value="21-30">21-30</option>
+                        <option value="31-40">31-40</option>
+                        <option value="41-50">41-50</option>
+                        <option value="51+">51+</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="skinFilter" class="form-label">Lọc theo màu da:</label>
+                    <select id="skinFilter" class="form-select">
+                        <option value="">Tất cả</option>
+                        <option value="White">Trắng</option>
+                        <option value="Yellow">Vàng</option>
+                        <option value="Black">Đen</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="sortBy" class="form-label">Sắp xếp theo:</label>
+                    <select id="sortBy" class="form-select">
+                        <option value="id">ID</option>
+                        <option value="age">Tuổi (tăng dần)</option>
+                        <option value="age-desc">Tuổi (giảm dần)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-12 text-center">
+                    <button id="applyFilters" class="btn btn-filter text-white">Áp dụng bộ lọc</button>
+                    <button id="clearFilters" class="btn btn-secondary">Xóa bộ lọc</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hiển thị kết quả -->
+        <div class="row" id="featuresContainer">
+            {% for feature in features %}
+            <div class="col-md-3 feature-item" 
+                 data-emotion="{{ feature.emotion }}" 
+                 data-age="{{ feature.age }}" 
+                 data-skin="{{ feature.skin_color }}">
+                <div class="feature-card">
+                    <img src="{{ feature.image_url }}" alt="Face" class="feature-image">
+                    <div class="feature-details">
+                        <p><span class="feature-label">ID:</span> {{ feature.image_id }}</p>
+                        <p><span class="feature-label">Cảm xúc:</span> <span class="emotion-value">{{ feature.emotion }}</span></p>
+                        <p><span class="feature-label">Tuổi:</span> <span class="age-value">{{ feature.age }}</span></p>
+                        <p><span class="feature-label">Màu da:</span> <span class="skin-value">{{ feature.skin_color }}</span></p>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Translation functions
+        function translateEmotion(emotion) {
+            const translations = {
+                'happy': 'Vui vẻ',
+                'sad': 'Buồn',
+                'angry': 'Giận dữ',
+                'fear': 'Sợ hãi',
+                'disgust': 'Ghê tởm',
+                'surprise': 'Ngạc nhiên',
+                'neutral': 'Trung tính'
+            };
+            return translations[emotion] || emotion;
+        }
+        
+        function translateSkinColor(skinColor) {
+            const translations = {
+                'White': 'Trắng',
+                'Yellow': 'Vàng',
+                'Black': 'Đen',
+                'unknown': 'Không xác định'
+            };
+            return translations[skinColor] || skinColor;
+        }
+
+        // Translate labels when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Translate emotion values
+            document.querySelectorAll('.emotion-value').forEach(function(el) {
+                const originalValue = el.textContent.trim();
+                el.textContent = translateEmotion(originalValue);
+            });
+            
+            // Translate skin color values
+            document.querySelectorAll('.skin-value').forEach(function(el) {
+                const originalValue = el.textContent.trim();
+                el.textContent = translateSkinColor(originalValue);
+            });
+            
+            // Add filter functionality
+            document.getElementById('applyFilters').addEventListener('click', filterFeatures);
+            document.getElementById('clearFilters').addEventListener('click', clearFilters);
+            document.getElementById('sortBy').addEventListener('change', sortFeatures);
+        });
+        
+        // Filter features based on selected criteria
+        function filterFeatures() {
+            const emotionFilter = document.getElementById('emotionFilter').value;
+            const ageFilter = document.getElementById('ageFilter').value;
+            const skinFilter = document.getElementById('skinFilter').value;
+            
+            document.querySelectorAll('.feature-item').forEach(function(item) {
+                let showItem = true;
+                
+                // Check emotion filter
+                if (emotionFilter && item.dataset.emotion !== emotionFilter) {
+                    showItem = false;
+                }
+                
+                // Check age filter
+                if (ageFilter && showItem) {
+                    const age = parseInt(item.dataset.age);
+                    if (!isNaN(age)) {
+                        if (ageFilter === '15-20' && (age < 15 || age > 20)) showItem = false;
+                        else if (ageFilter === '21-30' && (age < 21 || age > 30)) showItem = false;
+                        else if (ageFilter === '31-40' && (age < 31 || age > 40)) showItem = false;
+                        else if (ageFilter === '41-50' && (age < 41 || age > 50)) showItem = false;
+                        else if (ageFilter === '51+' && age < 51) showItem = false;
+                    }
+                }
+                
+                // Check skin filter
+                if (skinFilter && showItem && item.dataset.skin !== skinFilter) {
+                    showItem = false;
+                }
+                
+                // Show/hide item
+                item.style.display = showItem ? 'block' : 'none';
+            });
+        }
+        
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('emotionFilter').value = '';
+            document.getElementById('ageFilter').value = '';
+            document.getElementById('skinFilter').value = '';
+            document.getElementById('sortBy').value = 'id';
+            
+            document.querySelectorAll('.feature-item').forEach(function(item) {
+                item.style.display = 'block';
+            });
+        }
+        
+        // Sort features based on selected criteria
+        function sortFeatures() {
+            const sortBy = document.getElementById('sortBy').value;
+            const container = document.getElementById('featuresContainer');
+            const items = Array.from(container.querySelectorAll('.feature-item'));
+            
+            items.sort(function(a, b) {
+                if (sortBy === 'id') {
+                    return parseInt(a.querySelector('.feature-label').nextSibling.textContent) - 
+                           parseInt(b.querySelector('.feature-label').nextSibling.textContent);
+                } else if (sortBy === 'age') {
+                    return parseFloat(a.dataset.age || 0) - parseFloat(b.dataset.age || 0);
+                } else if (sortBy === 'age-desc') {
+                    return parseFloat(b.dataset.age || 0) - parseFloat(a.dataset.age || 0);
+                }
+                return 0;
+            });
+            
+            // Append sorted items
+            items.forEach(function(item) {
+                container.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html> 

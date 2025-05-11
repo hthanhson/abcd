@@ -5,7 +5,7 @@ import uuid
 import sys
 from werkzeug.utils import secure_filename
 from feature_extraction import extract_features
-from database import initialize_database, build_database, find_similar_faces, filter_database, clear_database
+from database import initialize_database, build_database, find_similar_faces, clear_database, db_manager
 import mysql_setup  # Import module thiết lập MySQL
 
 app = Flask(__name__)
@@ -21,7 +21,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 # Khởi tạo MySQL trước khi chạy ứng dụng
 mysql_setup.create_database()
 
-# Initialize features database (now using MySQL)
+# Initialize features database (now using MySQL Connector)
 features_db = initialize_database()
 
 @app.route('/')
@@ -63,7 +63,7 @@ def clear_db_route():
         return jsonify({
             'status': 'error',
             'message': 'Failed to clear database'
-    })
+        })
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -91,7 +91,7 @@ def search():
                 'message': 'No face detected in the uploaded image'
             })
         
-        # Find similar faces - sử dụng cả 4 đặc trưng
+        # Find similar faces
         similar_faces = find_similar_faces(
             encoding,
             top_n=3,
@@ -146,115 +146,7 @@ def search():
             'message': f'Error processing image: {str(e)}'
         })
 
-@app.route('/filter', methods=['POST'])
-def filter_images():
-    """Filter images by various criteria"""
-    emotion = request.form.get('emotion', '')
-    min_age = int(request.form.get('min_age', 0))
-    max_age = int(request.form.get('max_age', 100))
-    age_group = request.form.get('age_group', '')
-    skin_color = request.form.get('skin_color', '')
-    
-    # Filter database by criteria
-    results = filter_database(
-        emotion=emotion, 
-        min_age=min_age, 
-        max_age=max_age, 
-        age_group=age_group, 
-        skin_color=skin_color
-    )
-    
-    return jsonify({
-        'status': 'success',
-        'results': results
-    })
-
-@app.route('/api/category/<category_type>/<category_name>', methods=['GET'])
-def get_category_images(category_type, category_name):
-    """Trả về danh sách ảnh theo loại đặc trưng (emotions, age, skin) từ MySQL"""
-    if category_type not in ['emotions', 'age', 'skin']:
-        return jsonify({
-            'status': 'error',
-            'message': 'Invalid category type'
-        })
-    
-    # Xác định trường và giá trị cần tìm trong SQL
-    field_map = {
-        'emotions': 'emotion_type',
-        'age': 'age_group',
-        'skin': 'skin_color'
-    }
-    
-    table_map = {
-        'emotions': 'emotions',
-        'age': 'age_groups',
-        'skin': 'skin_colors'
-    }
-    
-    field = field_map[category_type]
-    table = table_map[category_type]
-    
-    # Import connection_pool từ database
-    from database import connection_pool
-    
-    if connection_pool is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'Database connection not available'
-        })
-    
-    try:
-        conn = connection_pool.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        
-        # Truy vấn dữ liệu từ MySQL
-        query = f"""
-            SELECT 
-                i.image_path,
-                e.emotion_type AS emotion,
-                a.estimated_age AS age,
-                ag.age_group,
-                s.skin_color
-            FROM images i
-            LEFT JOIN emotions e ON i.image_id = e.image_id
-            LEFT JOIN ages a ON i.image_id = a.image_id
-            LEFT JOIN age_groups ag ON i.image_id = ag.image_id
-            LEFT JOIN skin_colors s ON i.image_id = s.image_id
-            WHERE {field} = %s
-        """
-        
-        cursor.execute(query, (category_name,))
-        
-        results = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        
-        # Chuyển đổi kết quả để phù hợp với định dạng cũ
-        images = []
-        for result in results:
-            images.append({
-                'image_path': result['image_path'],
-                'original_path': result['image_path'],
-                'emotion': result['emotion'],
-                'age': result['age'],
-                'age_group': result['age_group'],
-                'skin_color': result['skin_color']
-            })
-        
-        return jsonify({
-            'status': 'success',
-            'category_type': category_type,
-            'category_name': category_name,
-            'images': images
-        })
-    except Exception as e:
-        print(f"Error in get_category_images: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Error retrieving images: {str(e)}'
-        })
-
-# Routes for serving static files
+# Routes for serving static files - cần thiết để ứng dụng hoạt động
 @app.route('/static/<path:filename>')
 def serve_static(filename):
     return send_from_directory('static', filename)
@@ -266,6 +158,46 @@ def serve_upload(filename):
 @app.route('/data_test/<path:filename>')
 def serve_data_test(filename):
     return send_from_directory(app.config['DATA_FOLDER'], filename)
+
+@app.route('/features')
+def show_features():
+    """Hiển thị tất cả các đặc trưng từ database"""
+    try:
+        # Lấy dữ liệu từ database
+        results = db_manager.execute_query(
+            """
+            SELECT 
+                i.image_id,
+                i.image_path,
+                e.emotion_type AS emotion,
+                a.estimated_age AS age,
+                s.skin_color
+            FROM images i
+            LEFT JOIN emotions e ON i.image_id = e.image_id
+            LEFT JOIN ages a ON i.image_id = a.image_id
+            LEFT JOIN skin_colors s ON i.image_id = s.image_id
+            LIMIT 100
+            """,
+            fetch_all=True
+        )
+        
+        # Xử lý đường dẫn ảnh để hiển thị
+        for result in results:
+            # Lấy đường dẫn tương đối từ đường dẫn đầy đủ
+            image_path = result['image_path']
+            if image_path.startswith(app.config['DATA_FOLDER']):
+                result['image_url'] = '/' + image_path
+            else:
+                result['image_url'] = '/data_test/' + os.path.basename(image_path)
+        
+        # Render template
+        return render_template('features.html', features=results)
+    except Exception as e:
+        print(f"Error retrieving features: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Error retrieving features: {str(e)}'
+        })
 
 # Compatibility route for backward compatibility
 @app.route('/images/<path:filename>')
@@ -290,5 +222,9 @@ if __name__ == '__main__':
             build_database(
                 app.config['DATA_FOLDER']
             )
+        elif sys.argv[1] == '--port' and len(sys.argv) > 2:
+            # Chạy ứng dụng với port tùy chỉnh
+            port = int(sys.argv[2])
+            app.run(debug=True, port=port)
     else:
         app.run(debug=True) 
