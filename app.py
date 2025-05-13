@@ -108,15 +108,30 @@ def search():
         
         # Process similar faces to include base64 images
         results = []
+        print("\n=== Debugging similarity values ===")
         for face in similar_faces:
             # Read and convert similar face image to base64
             with open(face['image_path'], "rb") as image_file:
                 face_image_data = base64.b64encode(image_file.read()).decode('utf-8')
             
+            # Đảm bảo giá trị total_score nằm trong khoảng 0-1
+            total_score = face['total_score']
+            print(f"Image path: {os.path.basename(face['image_path'])}")
+            print(f"Total score (before normalization): {total_score}")
+            
+            if total_score > 1.0:
+                print(f"Warning: Found total_score value > 1.0: {total_score}. Normalizing to 1.0.")
+                total_score = 1.0
+            elif total_score < 0.0:
+                print(f"Warning: Found total_score value < 0.0: {total_score}. Normalizing to 0.0.")
+                total_score = 0.0
+            
+            print(f"Final total_score used: {total_score}")
+            
             # Add to results list
             results.append({
                 'image': face_image_data,
-                'similarity': face['similarity'],
+                'total_score': total_score,  # Sử dụng total_score để frontend hiển thị
                 'features': {
                     'emotion': face['emotion'],
                     'age': face['age'],
@@ -125,6 +140,7 @@ def search():
                     'gender': 'unknown'  # Add placeholder for compatibility
                 }
             })
+        print("================================\n")
         
         # Return response
         return jsonify({

@@ -450,16 +450,6 @@
                 ageRow.appendChild(ageValueCell);
                 tableBody.appendChild(ageRow);
                 
-                // Age group row
-                const ageGroupRow = document.createElement('tr');
-                const ageGroupLabelCell = document.createElement('th');
-                ageGroupLabelCell.textContent = 'Nhóm tuổi:';
-                const ageGroupValueCell = document.createElement('td');
-                ageGroupValueCell.textContent = translateAgeGroup(features.age_group) || 'Không xác định';
-                ageGroupRow.appendChild(ageGroupLabelCell);
-                ageGroupRow.appendChild(ageGroupValueCell);
-                tableBody.appendChild(ageGroupRow);
-                
                 // Emotion row
                 const emotionRow = document.createElement('tr');
                 const emotionLabelCell = document.createElement('th');
@@ -524,7 +514,25 @@
                 
                 const similarityBadge = document.createElement('span');
                 similarityBadge.className = 'badge bg-primary';
-                similarityBadge.textContent = `${(result.similarity * 100).toFixed(2)}%`;
+                
+                // Hiển thị phần trăm tương đồng dựa trên total_score
+                let scoreValue = result.total_score;
+                
+                // Nếu không có total_score, có thể là phiên bản rất cũ của API
+                if (scoreValue === undefined) {
+                    console.warn('No total_score found in result, using default 0');
+                    scoreValue = 0;
+                }
+                
+                // Đảm bảo giá trị nằm trong khoảng 0-1
+                if (scoreValue > 1) {
+                    console.warn(`Total score value (${scoreValue}) is greater than 1, normalizing to range 0-1`);
+                    scoreValue = 1.0;
+                } else if (scoreValue < 0) {
+                    console.warn(`Total score value (${scoreValue}) is less than 0, normalizing to 0`);
+                    scoreValue = 0.0;
+                }
+                similarityBadge.textContent = `${(scoreValue * 100).toFixed(2)}%`;
                 
                 similarHeader.appendChild(matchLabel);
                 similarHeader.appendChild(similarityBadge);
@@ -557,11 +565,6 @@
                 age.className = 'list-group-item';
                 age.innerHTML = `<strong>Tuổi:</strong> ${result.features.age}`;
                 featuresList.appendChild(age);
-                
-                const ageGroup = document.createElement('li');
-                ageGroup.className = 'list-group-item';
-                ageGroup.innerHTML = `<strong>Nhóm tuổi:</strong> ${translateAgeGroup(result.features.age_group)}`;
-                featuresList.appendChild(ageGroup);
                 
                 const skinColor = document.createElement('li');
                 skinColor.className = 'list-group-item';

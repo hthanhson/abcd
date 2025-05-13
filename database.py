@@ -327,53 +327,72 @@ def find_similar_faces(query_encoding, top_n=3, query_emotion=None, query_age=No
             if face_info:
                 # Tính toán các điểm tương đồng cho từng đặc trưng
                 
-                # 1. Điểm cơ bản từ face embedding (0-1) - tăng trọng số từ 50% lên 55%
-                base_score = face_similarity
+                # 1. Điểm cơ bản từ face embedding (0-1)
+                # Điểm tương đồng thô (raw) có thể > 0.5 nên cần chuẩn hóa
+                # Đảm bảo base_score không vượt quá 0.5 (50%)
+                base_score = min(face_similarity, 1.0) * 0.5
                 
-                # 2. Điểm cảm xúc - nếu cùng cảm xúc thì có 0.25 điểm (tăng từ 0.2)
+                # 2. Điểm cảm xúc - nếu cùng cảm xúc thì có 0.25 điểm
                 emotion_score = 0.0
                 if query_emotion and face_info['emotion'] == query_emotion:
                     emotion_score = 0.25
                 
-                # 3. Điểm độ tuổi - dựa trên khoảng cách tuổi tương đối - giảm từ 20% xuống 15%
+                # 3. Điểm độ tuổi - dựa trên khoảng cách tuổi tương đối
                 age_score = 0.0
                 if query_age is not None and face_info['age'] is not None:
                     age_diff = abs(float(face_info['age']) - float(query_age))
                     max_age_diff = 50.0  # Giả sử chênh lệch tuổi tối đa
                     age_score = max(0, 0.15 * (1 - age_diff / max_age_diff))
                 
-                # Bỏ phần điểm nhóm tuổi (age_group_score)
-                
-                # 4. Điểm màu da - nếu cùng màu da thì có 0.05 điểm
+                # 4. Điểm màu da - nếu cùng màu da thì có 0.1 điểm
                 skin_score = 0.0
                 if query_skin_color and face_info['skin_color'] == query_skin_color:
                     skin_score = 0.1
                 
-                # Tính tổng điểm - phân bổ lại trọng số:
+                # Tính tổng điểm - phân bổ trọng số:
                 # - Face embedding: 50%
                 # - Cảm xúc: 25%
-                # - Độ tuổi: 15% (giảm để tổng đúng 100%)
+                # - Độ tuổi: 15%
                 # - Màu da: 10%
-                total_score = base_score * 0.50 + emotion_score + age_score + skin_score
+                total_score = base_score + emotion_score + age_score + skin_score
                 
+                # Đảm bảo tổng điểm không vượt quá 1.0 (100%)
+                total_score = min(total_score, 1.0)
+                
+                # Lưu lại thông tin về ảnh và các thành phần điểm
                 candidates.append({
                     'image_path': face_info['image_path'],
-                    'similarity': float(face_similarity),  # Điểm tương đồng dựa chỉ trên khuôn mặt
-                    'total_score': float(total_score),     # Điểm tổng hợp tất cả đặc trưng
+                    'total_score': float(total_score),         # Điểm tổng hợp tất cả đặc trưng
                     'emotion': face_info['emotion'],
                     'age': face_info['age'],
                     'age_group': face_info['age_group'],
-                    'skin_color': face_info['skin_color']
+                    'skin_color': face_info['skin_color'],
+                    # Lưu thêm các thành phần điểm để in ra terminal
+                    'base_score': float(base_score),
+                    'emotion_score': float(emotion_score),
+                    'age_score': float(age_score),
+                    'skin_score': float(skin_score)
                 })
         
         # Sắp xếp lại theo điểm tổng hợp và chọn top_n kết quả
         candidates.sort(key=lambda x: x['total_score'], reverse=True)
         results = candidates[:top_n]
         
-        # Cập nhật lại trường similarity để frontend hiểu được
+        # In thông tin chi tiết về các thành phần điểm của top N kết quả
+        print("\n=== DETAILED SCORING BREAKDOWN FOR TOP RESULTS ===")
+        for i, result in enumerate(results):
+            print(f"\n--- RESULT #{i+1}: {os.path.basename(result['image_path'])} ---")
+            print(f"base_score (50%): {result.get('base_score', 'N/A')}")
+            print(f"emotion_score (25%): {result.get('emotion_score', 'N/A')}")
+            print(f"age_score (15%): {result.get('age_score', 'N/A')}")
+            print(f"skin_score (10%): {result.get('skin_score', 'N/A')}")
+            print(f"TOTAL SCORE: {result.get('total_score', 'N/A')}")
+        print("===================================================\n")
+        
+        # Giữ nguyên các trường để frontend có thể sử dụng
         for result in results:
-            result['similarity'] = result['total_score']
-            del result['total_score']  # Xóa trường tạm thời
+            # Không xóa raw_similarity và total_score để frontend có thể hiển thị
+            pass
         
         return results
     

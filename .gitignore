@@ -1,5 +1,5 @@
 # Python files
-__pycache__/
+# __pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -21,13 +21,13 @@ wheels/
 *.egg
 
 # Virtual environment
-venv/
+# venv/
 env/
 ENV/
 
 # Project specific
 features.pkl
-uploads/
+# uploads/
 demo_output/
 benchmark_results/
 architecture.png
