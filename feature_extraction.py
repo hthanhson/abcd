@@ -1,187 +1,346 @@
-import face_recognition
 import cv2
 import numpy as np
-from deepface import DeepFace
-from emotion_detection import improve_emotion_detection
-from age_estimation import adjust_age_estimation
-from skin_classification import classify_skin_color
-from utils import categorize_age
 import os
-height, width = 224, 224  
-min_dimension = min(height, width) 
-min_face_size = int(min_dimension * 0.45)
-max_face_size = int(min_dimension * 0.60)
-def extract_features(image_path):
-    """Extract facial features: encoding, emotion, age, and skin color with improved accuracy"""
+from emotion_detection import get_emotion_vector, detect_emotion
+from gender_detection import get_gender_vector, detect_gender
+from skin_classification import get_skin_vector, classify_skin_color
+
+# Load the face cascade classifier
+face_cascade_path = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_default.xml')
+face_cascade = cv2.CascadeClassifier(face_cascade_path)
+
+def extract_face(image):
+    """
+    Extract face from an image using OpenCV
+    
+    Args:
+        image: Input image
+        
+    Returns:
+        numpy.ndarray: Extracted face region or None if no face found
+    """
+    # Input validation
+    if image is None or image.size == 0:
+        print("Invalid image in face extraction")
+        return None
+    
+    try:
+        # Convert to grayscale for face detection
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+        
+        # Improve contrast for better face detection
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced_gray = clahe.apply(gray)
+        
+        # Detect faces with different scales
+        faces = []
+        for scale in [1.1, 1.2, 1.3]:
+            detected = face_cascade.detectMultiScale(
+                enhanced_gray,
+                scaleFactor=scale,
+                minNeighbors=5,
+                minSize=(30, 30),
+                flags=cv2.CASCADE_SCALE_IMAGE
+            )
+            if len(detected) > 0:
+                faces = detected
+                break
+        
+        # If no face detected, try with less strict parameters
+        if len(faces) == 0:
+            faces = face_cascade.detectMultiScale(
+                enhanced_gray,
+                scaleFactor=1.05,
+                minNeighbors=3,
+                minSize=(20, 20)
+            )
+        
+        # If still no face, return center region of image
+        if len(faces) == 0:
+            h, w = image.shape[:2]
+            center_x, center_y = w // 2, h // 2
+            face_w, face_h = w // 2, h // 2
+            x1 = max(0, center_x - face_w // 2)
+            y1 = max(0, center_y - face_h // 2)
+            x2 = min(w, x1 + face_w)
+            y2 = min(h, y1 + face_h)
+            
+            print("No face detected, using center region of image")
+            if len(image.shape) == 3:
+                return image[y1:y2, x1:x2]
+            else:
+                return cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_GRAY2BGR)
+        
+        # Get the largest face (by area)
+        if len(faces) > 1:
+            print(f"Multiple faces detected ({len(faces)}), using the largest one")
+            largest_area = 0
+            largest_face = None
+            for (x, y, w, h) in faces:
+                if w * h > largest_area:
+                    largest_area = w * h
+                    largest_face = (x, y, w, h)
+            faces = [largest_face]
+        
+        # Extract the face region
+        (x, y, w, h) = faces[0]
+        
+        # Add margin to include whole face
+        margin_percent = 0.3
+        x_margin = int(w * margin_percent)
+        y_margin = int(h * margin_percent)
+        
+        x1 = max(0, x - x_margin)
+        y1 = max(0, y - y_margin)
+        x2 = min(image.shape[1], x + w + x_margin)
+        y2 = min(image.shape[0], y + h + y_margin)
+        
+        # Extract the face with margin
+        if len(image.shape) == 3:
+            face_region = image[y1:y2, x1:x2]
+        else:
+            face_region = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_GRAY2BGR)
+        
+        # Resize to standard size
+        face_region = cv2.resize(face_region, (128, 128))
+        
+        return face_region
+        
+    except Exception as e:
+        print(f"Error in face extraction: {e}")
+        return None
+
+def create_face_encoding(face_image):
+    """
+    Create a 128-dimensional vector encoding of the face using OpenCV
+    
+    Args:
+        face_image: Input face image
+        
+    Returns:
+        numpy.ndarray: 128-dimensional face encoding vector
+    """
+    # Input validation
+    if face_image is None or face_image.size == 0:
+        print("Invalid face image for encoding")
+        # Trả về vector với các giá trị ngẫu nhiên nhỏ thay vì toàn 0
+        return np.random.normal(0, 0.1, 128)
+    
+    try:
+        # Ensure image is in RGB format
+        if len(face_image.shape) < 3:
+            face_image = cv2.cvtColor(face_image, cv2.COLOR_GRAY2RGB)
+        
+        # Resize to standard size
+        face_image = cv2.resize(face_image, (128, 128))
+        
+        # Convert to grayscale
+        gray_face = cv2.cvtColor(face_image, cv2.COLOR_BGR2GRAY)
+        
+        # Tăng cường độ tương phản để có feature tốt hơn
+        gray_face = cv2.equalizeHist(gray_face)
+        
+        # Sử dụng phương pháp đơn giản hơn để tránh lỗi broadcast
+        # Chia ảnh thành 16 vùng, tính trung bình và độ lệch chuẩn cho mỗi vùng
+        regions_h = 4
+        regions_w = 4
+        region_h = gray_face.shape[0] // regions_h
+        region_w = gray_face.shape[1] // regions_w
+        
+        # Khởi tạo encoding
+        encoding = np.zeros(128)
+        idx = 0
+        
+        # Tạo đặc trưng từ các vùng khác nhau của khuôn mặt
+        for i in range(regions_h):
+            for j in range(regions_w):
+                # Lấy vùng
+                y_start = i * region_h
+                y_end = min((i + 1) * region_h, gray_face.shape[0])
+                x_start = j * region_w
+                x_end = min((j + 1) * region_w, gray_face.shape[1])
+                
+                region = gray_face[y_start:y_end, x_start:x_end]
+                
+                # Đảm bảo vùng không trống
+                if region.size == 0:
+                    # Nếu vùng trống, điền giá trị ngẫu nhiên
+                    features = np.random.normal(0, 0.1, 8)
+                else:
+                    # Tính toán gradient
+                    try:
+                        gx = cv2.Sobel(region, cv2.CV_32F, 1, 0)
+                        gy = cv2.Sobel(region, cv2.CV_32F, 0, 1)
+                        
+                        # Tính độ lớn và hướng gradient
+                        magnitude = cv2.magnitude(gx, gy)
+                        angle = cv2.phase(gx, gy, angleInDegrees=True)
+                        
+                        # Tạo histogram theo 8 hướng (0-45, 45-90, ...)
+                        hist = np.zeros(8)
+                        
+                        # Kiểm tra magnitude và angle có cùng kích thước
+                        if magnitude.shape == angle.shape and magnitude.size > 0:
+                            for a, m in zip(angle.flatten(), magnitude.flatten()):
+                                bin_idx = int(a // 45) % 8
+                                hist[bin_idx] += m
+                            
+                            # Chuẩn hóa histogram
+                            hist_sum = np.sum(hist)
+                            if hist_sum > 0:
+                                hist = hist / hist_sum
+                        else:
+                            # Nếu kích thước không khớp, tạo histogram ngẫu nhiên
+                            hist = np.random.normal(0, 0.1, 8)
+                        
+                        features = hist
+                    except Exception as e:
+                        print(f"Error processing region {i},{j}: {e}")
+                        # Sử dụng giá trị ngẫu nhiên nếu xử lý vùng gặp lỗi
+                        features = np.random.normal(0, 0.1, 8)
+                
+                # Thêm vào encoding nếu chỉ số hợp lệ
+                if idx + 8 <= 128:
+                    encoding[idx:idx+8] = features
+                else:
+                    print(f"Warning: Index {idx} out of bounds for encoding")
+                
+                idx += 8
+        
+        # Đảm bảo không còn chỉ số nào vượt quá kích thước của encoding
+        if idx < 128:
+            # Điền phần còn lại bằng giá trị ngẫu nhiên
+            encoding[idx:] = np.random.normal(0, 0.1, 128 - idx)
+        
+        # Chuẩn hóa toàn bộ encoding
+        norm = np.linalg.norm(encoding)
+        if norm > 0:
+            encoding = encoding / norm
+        else:
+            # Nếu norm bằng 0, tạo một vector ngẫu nhiên đã chuẩn hóa
+            random_encoding = np.random.normal(0, 1, 128)
+            random_norm = np.linalg.norm(random_encoding)
+            encoding = random_encoding / random_norm
+        
+        # Kiểm tra NaN và thay thế bằng 0
+        if np.isnan(encoding).any():
+            print("Warning: NaN values in face encoding, replacing with zeros")
+            encoding = np.nan_to_num(encoding)
+        
+        return encoding
+        
+    except Exception as e:
+        print(f"Error creating face encoding: {e}")
+        # Trả về vector ngẫu nhiên đã chuẩn hóa thay vì toàn 0
+        random_encoding = np.random.normal(0, 1, 128)
+        return random_encoding / np.linalg.norm(random_encoding)
+
+def extract_features(image_path=None, image_array=None):
+    """
+    Extract all features from an image and create a combined 176-dimensional vector
+    
+    Args:
+        image_path: Path to image file (optional if image_array is provided)
+        image_array: Image as numpy array (optional if image_path is provided)
+        
+    Returns:
+        dict: Dictionary containing all extracted features and vectors
+    """
+    result = {
+        'face_found': False,
+        'gender': 'Unknown',
+        'gender_confidence': 0.0,
+        'skin_color': 'Unknown',
+        'skin_confidence': 0.0,
+        'emotion': 'Unknown',
+        'emotion_confidence': 0.0,
+        'face_encoding': None,
+        'gender_vector': None,
+        'skin_vector': None,
+        'emotion_vector': None,
+        'combined_vector': None
+    }
+    
     try:
         # Load image
-        image = face_recognition.load_image_file(image_path)
-        
-        # Preprocess image to improve quality
-        # 1. Convert to grayscale to increase contrast
-        gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        
-        # 2. Improve contrast
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        enhanced_gray = clahe.apply(gray_image)
-        
-        # 3. Reduce noise
-        denoised = cv2.fastNlMeansDenoising(enhanced_gray, None, 10, 7, 21)
-        
-        # Find faces using multiple methods
-        # Try face_recognition first
-        face_locations = face_recognition.face_locations(image)
-        
-        # If no face is found, try with lower accuracy
-        if not face_locations:
-            # Try with CNN model which is slower but more accurate for difficult cases
-            face_locations = face_recognition.face_locations(image, model="cnn")
-        
-        # If still no face, try with OpenCV cascade
-        if not face_locations:
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            cv_faces = face_cascade.detectMultiScale(
-                denoised, 
-                scaleFactor=1.1, 
-                minNeighbors=3, 
-                minSize=(60,60),
-                flags=cv2.CASCADE_SCALE_IMAGE
-            )
-            
-            # Convert format from OpenCV to face_recognition
-            if len(cv_faces) > 0:
-                face_locations = []
-                for (x, y, w, h) in cv_faces:
-                    face_locations.append((y, x + w, y + h, x))  # top, right, bottom, left
-        
-        # If still no face found, try with different parameters
-        if not face_locations:
-            # Try with lower MinNeighbors parameter
-            cv_faces = face_cascade.detectMultiScale(
-                denoised, 
-                scaleFactor=1.05, 
-                minNeighbors=2, 
-                minSize=(40,40),
-                flags=cv2.CASCADE_SCALE_IMAGE
-            )
-            
-            if len(cv_faces) > 0:
-                face_locations = []
-                for (x, y, w, h) in cv_faces:
-                    face_locations.append((y, x + w, y + h, x))
-        
-        # If still no face found, assume a face in the center of the image (not ideal but better than nothing)
-        if not face_locations:
-            # Assume a face in the center of the image
-            height, width = image.shape[:2]
-            center_x, center_y = width // 2, height // 2
-            face_size = min(width, height) // 2
-            
-            # Create a virtual face
-            top = max(0, center_y - face_size)
-            right = min(width, center_x + face_size)
-            bottom = min(height, center_y + face_size)
-            left = max(0, center_x - face_size)
-            
-            face_locations = [(top, right, bottom, left)]
-            print(f"No face detected in {image_path}, using center of image")
-            
-        # Now we have face_locations, continue with analysis
-        
-        # Get encoding for the face
-        face_encodings = face_recognition.face_encodings(image, face_locations)
-        if not face_encodings and len(face_locations) > 0:
-            # Expand face area if encoding couldn't be obtained
-            expanded_face_locations = []
-            for (top, right, bottom, left) in face_locations:
-                height, width = image.shape[:2]
-                # Expand 20% in each direction
-                expand_px = min(bottom - top, right - left) // 5
-                new_top = max(0, top - expand_px)
-                new_right = min(width, right + expand_px)
-                new_bottom = min(height, bottom + expand_px)
-                new_left = max(0, left - expand_px)
-                expanded_face_locations.append((new_top, new_right, new_bottom, new_left))
-                
-            # Try to get encoding with expanded area
-            face_encodings = face_recognition.face_encodings(image, expanded_face_locations)
-            if face_encodings:
-                # If successful, update face_locations
-                face_locations = expanded_face_locations
-        
-        # If still couldn't get encoding
-        if not face_encodings:
-            # For difficult cases, create a dummy encoding
-            # Empty encoding with average values
-            dummy_encoding = np.zeros(128)
-            # Add some random variation to avoid exact duplicates
-            random_factor = np.random.normal(0, 0.01, 128)
-            dummy_encoding += random_factor
-            dummy_encoding /= np.linalg.norm(dummy_encoding)  # Normalize
-            print(f"Could not extract encoding from {image_path}, using fallback")
-            encoding = dummy_encoding
+        if image_path is not None:
+            image = cv2.imread(image_path)
+            if image is None:
+                print(f"Could not load image from path: {image_path}")
+                return result
+        elif image_array is not None:
+            image = image_array.copy()
         else:
-            encoding = face_encodings[0]  # Use first face
+            print("No image provided")
+            return result
         
-        # Đảm bảo encoding là mảng NumPy và có kích thước đúng
-        if not isinstance(encoding, np.ndarray):
-            encoding = np.array(encoding)
+        # Validate image
+        if image is None or image.size == 0:
+            print("Invalid image")
+            return result
         
-        if encoding.shape[0] != 128:
-            print(f"Warning: Unexpected encoding dimension {encoding.shape}, resizing to 128")
-            # Nếu kích thước không đúng, tạo vector ngẫu nhiên
-            dummy_encoding = np.random.normal(0, 0.01, 128)
-            dummy_encoding /= np.linalg.norm(dummy_encoding)
-            encoding = dummy_encoding
+        # Extract face
+        face_image = extract_face(image)
+        if face_image is None:
+            print("No face found in image")
+            return result
         
-        # Extract face region for further processing
-        top, right, bottom, left = face_locations[0]
-        face_image = image[top:bottom, left:right]
+        # Mark as face found
+        result['face_found'] = True
         
-        # Analyze emotion and age using DeepFace
-        try:
-            # Try using both the extracted face and the full image
-            try:
-                analysis = DeepFace.analyze(
-                    face_image, 
-                    actions=['emotion', 'age'], 
-                    enforce_detection=False,
-                    detector_backend='retinaface'
-                )
-            except:
-                # If direct face analysis fails, try with original image
-                analysis = DeepFace.analyze(
-                    image_path, 
-                    actions=['emotion', 'age'], 
-                    enforce_detection=False,
-                    detector_backend='opencv'  # Try with opencv if retinaface fails
-                )
-            
-            # Ensure consistent format
-            if isinstance(analysis, list):
-                analysis = analysis[0]
-            
-            # Get emotion data and improve accuracy
-            emotions_dict = analysis['emotion']
-            emotion = analysis['dominant_emotion']
-            improved_emotion = improve_emotion_detection(emotion, face_image, emotions_dict)
-            
-            # Get age and adjust
-            raw_age = analysis['age']
-            adjusted_age = adjust_age_estimation(raw_age, face_image)
-            age_group = categorize_age(adjusted_age)
-            
-            # Analyze skin color
-            hsv_face = cv2.cvtColor(face_image, cv2.COLOR_RGB2HSV)
-            skin_color_category = classify_skin_color(hsv_face)
-            
-            return encoding, improved_emotion, adjusted_age, age_group, skin_color_category
-            
-        except Exception as e:
-            print(f"Error with DeepFace analysis: {e}")
-            # Return default values if analysis fails
-            return encoding, "neutral", 30, "adult", "unknown"
-            
+        # Extract face encoding (128-dimensional vector)
+        face_encoding = create_face_encoding(face_image)
+        result['face_encoding'] = face_encoding
+        
+        # Detect gender and create gender vector (16-dimensional)
+        gender, gender_confidence = detect_gender(face_image)
+        result['gender'] = gender
+        result['gender_confidence'] = gender_confidence
+        gender_vector = get_gender_vector(face_image)
+        result['gender_vector'] = gender_vector
+        
+        # Detect skin color and create skin vector (16-dimensional)
+        skin_color, skin_confidence = classify_skin_color(face_image)
+        result['skin_color'] = skin_color
+        result['skin_confidence'] = skin_confidence
+        skin_vector = get_skin_vector(face_image)
+        result['skin_vector'] = skin_vector
+        
+        # Detect emotion and create emotion vector (16-dimensional)
+        emotion, emotion_confidence = detect_emotion(face_image)
+        result['emotion'] = emotion
+        result['emotion_confidence'] = emotion_confidence
+        emotion_vector = get_emotion_vector(face_image)
+        result['emotion_vector'] = emotion_vector
+        
+        # Create combined vector (176-dimensional)
+        # Concatenate face_encoding (128), gender_vector (16), skin_vector (16), emotion_vector (16)
+        combined_vector = np.concatenate([face_encoding, gender_vector, skin_vector, emotion_vector])
+        
+        # Ensure the vector is exactly 176 dimensions
+        if combined_vector.shape[0] != 176:
+            print(f"Warning: Combined vector has {combined_vector.shape[0]} dimensions, expected 176")
+            # Padding if necessary
+            if combined_vector.shape[0] < 176:
+                padding = np.zeros(176 - combined_vector.shape[0])
+                combined_vector = np.concatenate([combined_vector, padding])
+            # Truncating if necessary
+            elif combined_vector.shape[0] > 176:
+                combined_vector = combined_vector[:176]
+        
+        # Check for NaN values and replace with zeros
+        if np.isnan(combined_vector).any():
+            print("Warning: NaN values detected in combined vector, replacing with zeros")
+            combined_vector = np.nan_to_num(combined_vector)
+        
+        result['combined_vector'] = combined_vector
+        
+        print(f"Features extracted successfully: {gender} {skin_color} {emotion}")
+        return result
+        
     except Exception as e:
-        print(f"Critical error analyzing image {image_path}: {e}")
-        return None, None, None, None, None 
+        print(f"Error extracting features: {e}")
+        return result

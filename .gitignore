@@ -24,7 +24,8 @@ wheels/
 # venv/
 env/
 ENV/
-
+requirement.txt
+requirements.txt
 # Project specific
 features.pkl
 # uploads/
@@ -32,7 +33,7 @@ demo_output/
 benchmark_results/
 architecture.png
 screenshot.png
-
+mysql_setup.py
 # IDE files
 .idea/
 .vscode/

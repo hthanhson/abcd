@@ -1,0 +1,299 @@
+/* Main styles for the face recognition app */
+body {
+    font-family: 'Roboto', sans-serif;
+    background-color: #f8f9fa;
+    padding-bottom: 40px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.app-title {
+    text-align: center;
+    margin: 30px 0;
+    color: #343a40;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Tabs styling */
+.nav-tabs {
+    margin-bottom: 20px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 10px 20px;
+    margin-right: 10px;
+}
+
+.nav-tabs .nav-link:hover {
+    border: none;
+    color: #495057;
+}
+
+.nav-tabs .nav-link.active {
+    color: #007bff;
+    background: none;
+    border: none;
+    border-bottom: 2px solid #007bff;
+}
+
+/* Upload area styling */
+.upload-area {
+    border: 2px dashed #ced4da;
+    border-radius: 5px;
+    background-color: #fff;
+    padding: 30px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 20px;
+    position: relative;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.upload-area:hover {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.03);
+}
+
+.upload-area.highlight {
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.upload-icon {
+    font-size: 50px;
+    color: #ced4da;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover .upload-icon {
+    color: #007bff;
+    transform: scale(1.1);
+}
+
+.upload-text {
+    color: #6c757d;
+    margin-bottom: 0;
+}
+
+.preview-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+.preview-image {
+    max-width: 100%;
+    max-height: 250px;
+    object-fit: contain;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.remove-preview {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 10;
+}
+
+/* Button styling */
+.select-image-btn {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    margin-top: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.select-image-btn:hover {
+    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.select-image-btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* External select image button */
+#selectImageBtn {
+    font-weight: 500;
+    padding: 10px 15px;
+    transition: all 0.3s ease;
+}
+
+#selectImageBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+#selectImageBtn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* Filters styling */
+.filters-container {
+    background-color: #fff;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.filters-container h5 {
+    margin-bottom: 15px;
+    color: #343a40;
+    font-weight: 600;
+}
+
+.form-group label {
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Search button styling */
+.search-btn {
+    width: 100%;
+    padding: 10px;
+    font-weight: 500;
+    margin-top: 10px;
+}
+
+/* Loading animation */
+.loading {
+    display: none;
+    text-align: center;
+    padding: 20px;
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+
+/* Results styling */
+.search-results {
+    display: none;
+    margin-top: 30px;
+}
+
+.result-card {
+    box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+    position: relative;
+    height: 100%;
+}
+
+.result-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+
+.result-image {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+}
+
+.similarity-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: rgba(0, 123, 255, 0.9);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 0.8rem;
+}
+
+.feature-badge {
+    margin-right: 5px;
+    margin-bottom: 5px;
+    display: inline-block;
+}
+
+/* Database management styling */
+.database-section {
+    background-color: #fff;
+    border-radius: 5px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.database-section h5 {
+    margin-bottom: 15px;
+    color: #343a40;
+    font-weight: 600;
+}
+
+.warning-text {
+    color: #dc3545;
+    font-size: 0.9rem;
+    margin-top: 5px;
+}
+
+#databaseLoading {
+    display: none;
+    text-align: center;
+    padding: 10px;
+}
+
+#databaseMessage {
+    display: none;
+    margin-top: 15px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .col-md-4 {
+        margin-bottom: 20px;
+    }
+}
+
+/* Animations */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.btn-pulse {
+    animation: pulse 1.5s infinite;
+} 

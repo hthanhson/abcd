@@ -1,246 +1,310 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, url_for, send_from_directory, redirect
 import os
 import base64
-import uuid
-import sys
+import cv2
+import numpy as np
+import json
 from werkzeug.utils import secure_filename
+from datetime import datetime
 from feature_extraction import extract_features
-from database import initialize_database, build_database, find_similar_faces, clear_database, db_manager
-import mysql_setup  # Import module thiết lập MySQL
+from database import (
+    build_database, clear_database, find_similar_faces, get_all_features
+)
+import utils
 
-app = Flask(__name__)
-
-# Configuration
+app = Flask(__name__, static_folder='static')
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['DATA_FOLDER'] = 'data_test'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max size
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'bmp'}
 
-# Create necessary folders
+# Đảm bảo thư mục uploads tồn tại
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Khởi tạo MySQL trước khi chạy ứng dụng
-mysql_setup.create_database()
-
-# Initialize features database (now using MySQL Connector)
-features_db = initialize_database()
+def allowed_file(filename):
+    """Check if a file has an allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 @app.route('/')
 def index():
-    """Render main page"""
+    """Render the main page"""
     return render_template('index.html')
 
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload for search or database building"""
+    try:
+        if 'file' not in request.files:
+            app.logger.error("Upload error: No file part in request")
+            return jsonify({'success': False, 'error': 'Không có file trong yêu cầu'})
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            app.logger.error("Upload error: Empty filename")
+            return jsonify({'success': False, 'error': 'Không có file được chọn'})
+        
+        if not allowed_file(file.filename):
+            app.logger.error(f"Upload error: Invalid file type - {file.filename}")
+            return jsonify({'success': False, 'error': 'Loại file không được hỗ trợ'})
+        
+        # Kiểm tra kích thước file (giới hạn 10MB)
+        file_content = file.read()
+        file_size = len(file_content)
+        max_size = 10 * 1024 * 1024  # 10MB
+        
+        if file_size > max_size:
+            app.logger.error(f"Upload error: File too large - {file_size} bytes")
+            return jsonify({'success': False, 'error': 'File quá lớn. Vui lòng chọn file nhỏ hơn 10MB'})
+        
+        # Đặt con trỏ về đầu file để sử dụng lại
+        file.seek(0)
+        
+        # Create a unique filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        unique_filename = f"{timestamp}_{filename}"
+        
+        # Make sure the uploads directory exists
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        
+        # Save the file
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        file.save(file_path)
+        
+        app.logger.info(f"File successfully uploaded: {file_path}")
+        return jsonify({'success': True, 'file_path': file_path})
+    
+    except Exception as e:
+        app.logger.error(f"Upload error: {str(e)}")
+        return jsonify({'success': False, 'error': f'Lỗi khi xử lý file: {str(e)}'})
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    """Phục vụ file đã upload"""
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
 @app.route('/build-database', methods=['POST'])
-def build_db_route():
-    """Build or rebuild the feature database"""
-    count = build_database(
-        app.config['DATA_FOLDER']
-    )
-    
-    # Reload the database after building
-    global features_db
-    features_db = initialize_database()
-    
-    return jsonify({
-        'status': 'success',
-        'message': f'Database built with {count} faces'
-    })
+def build_db():
+    """Xây dựng database từ thư mục ảnh"""
+    try:
+        # Kiểm tra xem dữ liệu được gửi dưới dạng nào
+        if request.is_json:
+            # Nếu là JSON
+            data = request.get_json()
+            folder_path = data.get('folder_path', '')
+        else:
+            # Nếu là form data
+            folder_path = request.form.get('folder_path', '')
+        
+        # Xử lý đường dẫn
+        folder_path = folder_path.strip()
+        
+        # Kiểm tra đường dẫn
+        if not folder_path:
+            return jsonify({'success': False, 'error': 'Đường dẫn thư mục không được để trống'})
+            
+        # Mở rộng đường dẫn người dùng (hỗ trợ ~, biến môi trường, etc.)
+        folder_path = os.path.expanduser(folder_path)
+        folder_path = os.path.expandvars(folder_path)
+        folder_path = os.path.abspath(folder_path)
+        
+        # Kiểm tra xem thư mục có tồn tại không
+        if not os.path.exists(folder_path):
+            return jsonify({'success': False, 'error': f'Thư mục không tồn tại: {folder_path}'})
+            
+        if not os.path.isdir(folder_path):
+            return jsonify({'success': False, 'error': f'{folder_path} không phải là thư mục'})
+        
+        print(f"Xây dựng CSDL từ thư mục: {folder_path}")
+        success, count = build_database(folder_path)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Đã thêm {count} ảnh vào cơ sở dữ liệu'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Không thể xây dựng cơ sở dữ liệu'
+            })
+    except Exception as e:
+        print(f"Error in build_db: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Lỗi xử lý: {str(e)}'
+        })
 
 @app.route('/clear-database', methods=['POST'])
-def clear_db_route():
-    """Xóa toàn bộ dữ liệu trong database"""
-    success = clear_database()
-    
-    # Khởi tạo lại connection
-    global features_db
-    features_db = initialize_database()
-    
-    if success:
+def clear_db():
+    """Xóa tất cả dữ liệu từ database"""
+    try:
+        result = clear_database()
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'message': 'Đã xóa cơ sở dữ liệu thành công'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Không thể xóa cơ sở dữ liệu'
+            })
+    except Exception as e:
+        print(f"Error in clear_db: {e}")
         return jsonify({
-            'status': 'success',
-            'message': 'Database has been cleared successfully'
-        })
-    else:
-        return jsonify({
-            'status': 'error',
-            'message': 'Failed to clear database'
+            'success': False,
+            'error': f'Lỗi xử lý: {str(e)}'
         })
 
 @app.route('/search', methods=['POST'])
 def search():
-    """Search for similar faces using an uploaded image"""
-    if 'file' not in request.files:
-        return jsonify({'status': 'error', 'message': 'No file part'})
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'status': 'error', 'message': 'No selected file'})
-    
-    # Save the uploaded file
-    filename = str(uuid.uuid4()) + '_' + secure_filename(file.filename)
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
-    
+    """Search for similar faces"""
     try:
-        # Extract features
-        encoding, emotion, age, age_group, skin_color = extract_features(file_path)
+        # Get file path from request
+        file_path = request.form.get('file_path')
+        print(f"=== SEARCH FUNCTION CALLED ===")
+        print(f"File path received: {file_path}")
         
-        if encoding is None:
-            os.remove(file_path)  # Clean up
+        # Extract features from the input image
+        print(f"Extracting features from image...")
+        features = extract_features(image_path=file_path)
+        
+        if not features['face_found']:
+            print(f"No face found in the uploaded image")
             return jsonify({
-                'status': 'error',
-                'message': 'No face detected in the uploaded image'
+                'success': False,
+                'error': 'No face found in the uploaded image'
             })
         
-        # Find similar faces
-        similar_faces = find_similar_faces(
-            encoding,
-            top_n=3,
-            query_emotion=emotion,
-            query_age=age,
-            query_age_group=age_group,
-            query_skin_color=skin_color
-        )
+        print(f"Face found. Gender: {features['gender']}, Skin color: {features['skin_color']}, Emotion: {features['emotion']}")
         
-        # Prepare response with base64 encoded images
-        # Read the query image and convert to base64
-        with open(file_path, "rb") as image_file:
-            query_image_data = base64.b64encode(image_file.read()).decode('utf-8')
+        # Find similar faces - không sử dụng bộ lọc
+        print(f"Finding similar faces in database...")
+        similar_faces = find_similar_faces(features, top_n=3, filters=None)
         
-        # Process similar faces to include base64 images
+        if not similar_faces:
+            print(f"No similar faces found in the database")
+            return jsonify({
+                'success': False,
+                'error': 'No similar faces found in the database'
+            })
+        
+        print(f"Found {len(similar_faces)} similar faces")
+        
+        # Prepare result for the frontend
         results = []
-        print("\n=== Debugging similarity values ===")
-        for face in similar_faces:
-            # Read and convert similar face image to base64
-            with open(face['image_path'], "rb") as image_file:
-                face_image_data = base64.b64encode(image_file.read()).decode('utf-8')
-            
-            # Đảm bảo giá trị total_score nằm trong khoảng 0-1
-            total_score = face['total_score']
-            print(f"Image path: {os.path.basename(face['image_path'])}")
-            print(f"Total score (before normalization): {total_score}")
-            
-            if total_score > 1.0:
-                print(f"Warning: Found total_score value > 1.0: {total_score}. Normalizing to 1.0.")
-                total_score = 1.0
-            elif total_score < 0.0:
-                print(f"Warning: Found total_score value < 0.0: {total_score}. Normalizing to 0.0.")
-                total_score = 0.0
-            
-            print(f"Final total_score used: {total_score}")
-            
-            # Add to results list
-            results.append({
-                'image': face_image_data,
-                'total_score': total_score,  # Sử dụng total_score để frontend hiển thị
-                'features': {
-                    'emotion': face['emotion'],
-                    'age': face['age'],
-                    'age_group': face['age_group'],
-                    'skin_color': face['skin_color'],
-                    'gender': 'unknown'  # Add placeholder for compatibility
-                }
-            })
-        print("================================\n")
+        for i, face in enumerate(similar_faces):
+            # Chuyển đổi đường dẫn tuyệt đối thành đường dẫn tương đối 
+            image_path = face['image_path']
+            if 'data_test/' in image_path:
+                # Lấy tên file từ đường dẫn tuyệt đối
+                filename = os.path.basename(image_path)
+                # Tạo URL tương đối
+                relative_path = f"/data_test/{filename}"
+            else:
+                # Giữ nguyên đường dẫn nếu không phải từ data_test
+                relative_path = image_path
+                
+            result = {
+                'image_path': relative_path,
+                'gender': utils.translate_gender(face['gender_type']),
+                'skin_color': utils.translate_skin_color(face['skin_color_type']),
+                'emotion': utils.translate_emotion(face['emotion_type']),
+                'rank': face['rank']
+            }
+            print(f"Result #{i+1}: {result}")
+            results.append(result)
         
-        # Return response
-        return jsonify({
-            'status': 'success',
-            'query_image': query_image_data,
-            'query_features': {
-                'emotion': emotion,
-                'age': age,
-                'age_group': age_group,
-                'skin_color': skin_color,
-                'gender': 'unknown'  # Add placeholder for compatibility
-            },
+        # Add query image information - sử dụng uploads cho ảnh đầu vào
+        query_relative_path = file_path
+        if file_path.startswith(app.config['UPLOAD_FOLDER']):
+            filename = os.path.basename(file_path)
+            query_relative_path = f"/uploads/{filename}"
+            
+        query_info = {
+            'image_path': query_relative_path,
+            'gender': utils.translate_gender(features['gender']),
+            'skin_color': utils.translate_skin_color(features['skin_color']),
+            'emotion': utils.translate_emotion(features['emotion'])
+        }
+        
+        print(f"Query info: {query_info}")
+        print(f"Returning results to frontend...")
+        
+        response_data = {
+            'success': True,
+            'query': query_info,
             'results': results
-        })
+        }
+        print(f"Response data: {json.dumps(response_data, indent=2)}")
+        return jsonify(response_data)
+    
     except Exception as e:
-        print(f"Error in search: {str(e)}")
+        print(f"Error in search: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            'status': 'error',
-            'message': f'Error processing image: {str(e)}'
+            'success': False,
+            'error': f'Error processing search: {str(e)}'
         })
-
-# Routes for serving static files - cần thiết để ứng dụng hoạt động
-@app.route('/static/<path:filename>')
-def serve_static(filename):
-    return send_from_directory('static', filename)
-
-@app.route('/uploads/<path:filename>')
-def serve_upload(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/data_test/<path:filename>')
 def serve_data_test(filename):
-    return send_from_directory(app.config['DATA_FOLDER'], filename)
+    """Phục vụ file từ thư mục data_test"""
+    # Sử dụng đường dẫn tuyệt đối đến thư mục data_test
+    data_test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data_test')
+    
+    print(f"Requested file: {filename}")
+    print(f"Looking in directory: {data_test_dir}")
+    
+    # Kiểm tra xem file có tồn tại không
+    full_path = os.path.join(data_test_dir, filename)
+    if os.path.exists(full_path):
+        print(f"File exists: {full_path}")
+    else:
+        print(f"File does not exist: {full_path}")
+    
+    return send_from_directory(data_test_dir, filename)
 
-@app.route('/features')
-def show_features():
-    """Hiển thị tất cả các đặc trưng từ database"""
+# Đảm bảo thư mục data_test tồn tại
+os.makedirs('data_test', exist_ok=True)
+
+@app.route('/get-features', methods=['GET'])
+def get_features_api():
+    """Lấy danh sách các đặc trưng duy nhất từ cơ sở dữ liệu"""
     try:
-        # Lấy dữ liệu từ database
-        results = db_manager.execute_query(
-            """
-            SELECT 
-                i.image_id,
-                i.image_path,
-                e.emotion_type AS emotion,
-                a.estimated_age AS age,
-                s.skin_color
-            FROM images i
-            LEFT JOIN emotions e ON i.image_id = e.image_id
-            LEFT JOIN ages a ON i.image_id = a.image_id
-            LEFT JOIN skin_colors s ON i.image_id = s.image_id
-            LIMIT 100
-            """,
-            fetch_all=True
-        )
+        features = get_all_features()
         
-        # Xử lý đường dẫn ảnh để hiển thị
-        for result in results:
-            # Lấy đường dẫn tương đối từ đường dẫn đầy đủ
-            image_path = result['image_path']
-            if image_path.startswith(app.config['DATA_FOLDER']):
-                result['image_url'] = '/' + image_path
-            else:
-                result['image_url'] = '/data_test/' + os.path.basename(image_path)
+        # Chuyển đổi sang tiếng Việt
+        translated_features = {
+            'genders': [utils.translate_gender(gender) for gender in features['genders']],
+            'skin_colors': [utils.translate_skin_color(skin) for skin in features['skin_colors']],
+            'emotions': [utils.translate_emotion(emotion) for emotion in features['emotions']]
+        }
         
-        # Render template
-        return render_template('features.html', features=results)
-    except Exception as e:
-        print(f"Error retrieving features: {str(e)}")
         return jsonify({
-            'status': 'error',
-            'message': f'Error retrieving features: {str(e)}'
+            'success': True,
+            'features': translated_features
+        })
+    except Exception as e:
+        print(f"Error in get_features_api: {e}")
+        return jsonify({
+            'success': False,
+            'error': f'Lỗi khi lấy đặc trưng: {str(e)}'
         })
 
-# Compatibility route for backward compatibility
-@app.route('/images/<path:filename>')
-def get_image(filename):
-    # Determine base directory based on path
-    if filename.startswith(app.config['UPLOAD_FOLDER']):
-        return send_from_directory(
-            app.config['UPLOAD_FOLDER'], 
-            filename.replace(app.config['UPLOAD_FOLDER'] + '/', '')
-        )
-    elif filename.startswith(app.config['DATA_FOLDER']):
-        return send_from_directory(
-            app.config['DATA_FOLDER'], 
-            filename.replace(app.config['DATA_FOLDER'] + '/', '')
-        )
-    return send_from_directory(os.path.dirname(filename), os.path.basename(filename))
+@app.route('/test-search')
+def test_search():
+    """Render the test search page"""
+    return render_template('test_search.html')
+
+@app.route('/simple')
+def simple_search():
+    """Render the simple search page"""
+    return render_template('search_simple.html')
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        if sys.argv[1] == 'build_db':
-            # Chạy build database
-            build_database(
-                app.config['DATA_FOLDER']
-            )
-        elif sys.argv[1] == '--port' and len(sys.argv) > 2:
-            # Chạy ứng dụng với port tùy chỉnh
-            port = int(sys.argv[2])
-            app.run(debug=True, port=port)
-    else:
-        app.run(debug=True) 
+    app.run(host='0.0.0.0', port=8080, debug=True)

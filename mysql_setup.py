@@ -1,124 +1,108 @@
-"""
-Script để tạo cơ sở dữ liệu MySQL và các bảng cần thiết
-"""
-
 import mysql.connector
-from mysql.connector import Error
-from db_config import MYSQL_CONFIG
+import db_config
 
-def create_database():
-    """Tạo cơ sở dữ liệu nếu chưa tồn tại"""
+def setup_database():
+    """
+    Set up the MySQL database with all necessary tables
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
     try:
-        # Kết nối tới MySQL mà không chỉ định database
+        # Connect to MySQL server (without specifying database)
         conn = mysql.connector.connect(
-            host=MYSQL_CONFIG['host'],
-            user=MYSQL_CONFIG['user'],
-            password=MYSQL_CONFIG['password']
+            host=db_config.DB_HOST,
+            user=db_config.DB_USER,
+            password=db_config.DB_PASSWORD
         )
         
         cursor = conn.cursor()
         
-        # Tạo database
-        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {MYSQL_CONFIG['database']}")
-        print(f"Database {MYSQL_CONFIG['database']} created successfully")
+        # Create database if it doesn't exist
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_config.DB_NAME}")
         
-        cursor.close()
-        conn.close()
+        # Use the database
+        cursor.execute(f"USE {db_config.DB_NAME}")
         
-        # Sau khi tạo database, tạo các bảng
-        create_tables()
-        
-    except Error as e:
-        print(f"Error creating database: {e}")
-
-def create_tables():
-    """Tạo các bảng cần thiết trong cơ sở dữ liệu"""
-    try:
-        conn = mysql.connector.connect(**MYSQL_CONFIG)
-        cursor = conn.cursor()
-        
-        # Bảng ảnh (bảng chính)
+        # Create 'images' table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS images (
-            image_id INT AUTO_INCREMENT PRIMARY KEY,
-            image_name VARCHAR(255) NOT NULL,
-            image_path VARCHAR(512) NOT NULL,
-            upload_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY (image_path)
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_path VARCHAR(255) NOT NULL,
+            added_date DATETIME NOT NULL
         )
         """)
         
-        # Bảng đặc trưng khuôn mặt (encodings)
+        # Create 'face_encodings' table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS face_encodings (
-            encoding_id INT AUTO_INCREMENT PRIMARY KEY,
+            id INT AUTO_INCREMENT PRIMARY KEY,
             image_id INT NOT NULL,
-            encoding_data TEXT NOT NULL,
-            FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id)
+            face_encoding JSON NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
         )
         """)
         
-        # Bảng cảm xúc
+        # Create 'genders' table
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS emotions (
-            emotion_id INT AUTO_INCREMENT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS genders (
+            id INT AUTO_INCREMENT PRIMARY KEY,
             image_id INT NOT NULL,
-            emotion_type ENUM('happy', 'sad', 'angry', 'fear', 'surprise', 'disgust', 'neutral') NOT NULL,
-            confidence_value FLOAT NOT NULL DEFAULT 0,
-            FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id),
-            INDEX (emotion_type)
+            gender_type ENUM('Man', 'Woman', 'Unknown') NOT NULL,
+            confidence_value FLOAT NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
         )
         """)
         
-        # Bảng tuổi
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ages (
-            age_id INT AUTO_INCREMENT PRIMARY KEY,
-            image_id INT NOT NULL,
-            estimated_age FLOAT NOT NULL,
-            confidence_value FLOAT NOT NULL DEFAULT 0,
-            FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id)
-        )
-        """)
-        
-        # Bảng nhóm tuổi
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS age_groups (
-            age_group_id INT AUTO_INCREMENT PRIMARY KEY,
-            image_id INT NOT NULL,
-            age_group ENUM('child', 'teen', 'adult', 'senior') NOT NULL,
-            confidence_value FLOAT NOT NULL DEFAULT 1.0,
-            FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id),
-            INDEX (age_group)
-        )
-        """)
-        
-        # Bảng màu da
+        # Create 'skin_colors' table
         cursor.execute("""
         CREATE TABLE IF NOT EXISTS skin_colors (
-            skin_color_id INT AUTO_INCREMENT PRIMARY KEY,
+            id INT AUTO_INCREMENT PRIMARY KEY,
             image_id INT NOT NULL,
-            skin_color ENUM('White', 'Black', 'Yellow', 'unknown') NOT NULL,
-            confidence_value FLOAT NOT NULL DEFAULT 1.0,
-            FOREIGN KEY (image_id) REFERENCES images(image_id) ON DELETE CASCADE,
-            INDEX (image_id),
-            INDEX (skin_color)
+            skin_color_type ENUM('White', 'Black', 'Yellow', 'Unknown') NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
         )
         """)
         
-        print("All tables created successfully")
+        # Create 'emotions' table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS emotions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            emotion_type ENUM('Angry', 'Disgusted', 'Fearful', 'Happy', 'Sad', 'Surprised', 'Neutral', 'Unknown') NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
+        )
+        """)
         
+        # Create 'feature_vectors' table
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS feature_vectors (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_id INT NOT NULL,
+            gender_vector JSON NOT NULL,
+            skin_vector JSON NOT NULL,
+            emotion_vector JSON NOT NULL,
+            combined_vector JSON NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
+        )
+        """)
+        
+        # Commit changes
+        conn.commit()
+        
+        print("Database setup completed successfully!")
+        print(f"Database name: {db_config.DB_NAME}")
+        print(f"Tables created: images, face_encodings, genders, skin_colors, emotions, feature_vectors")
+        
+        # Close connection
         cursor.close()
         conn.close()
         
-    except Error as e:
-        print(f"Error creating tables: {e}")
+        return True
+        
+    except Exception as e:
+        print(f"Error setting up database: {e}")
+        return False
 
 if __name__ == "__main__":
-    print("Setting up MySQL database...")
-    create_database()
-    print("Setup complete.") 
+    setup_database()

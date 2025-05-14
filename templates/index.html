@@ -3,592 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Nhận diện Khuôn mặt</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>Hệ thống Tìm kiếm Khuôn mặt</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
     <style>
         body {
+            padding: 20px 0;
             background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .header {
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            color: white;
-            padding: 2rem 0;
-            margin-bottom: 2rem;
-            border-radius: 0 0 15px 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            transition: transform 0.3s ease;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        .card-header {
-            background: linear-gradient(135deg, #a777e3, #6e8efb);
-            color: white;
-            border-radius: 15px 15px 0 0 !important;
-            font-weight: bold;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #6e8efb, #a777e3);
-            border: none;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #5d7de9, #9564d2);
-            transform: translateY(-2px);
-        }
-        .result-container {
-            display: none;
-            margin-top: 30px;
-        }
-        .face-card {
-            position: relative;
-            overflow: hidden;
+        .container {
+            background-color: #fff;
             border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 800px;
         }
-        .face-card img {
-            width: 100%;
-            height: 250px;
-            object-fit: cover;
-            transition: transform 0.3s ease;
-        }
-        .face-card:hover img {
-            transform: scale(1.05);
-        }
-        .loading {
-            display: none;
+        h1 {
+            color: #343a40;
             text-align: center;
-            margin: 20px 0;
+            margin-bottom: 30px;
         }
-        .loading i {
-            font-size: 3rem;
-            color: #6e8efb;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .nav-tabs .nav-link {
-            border-radius: 10px 10px 0 0;
-            font-weight: 600;
-        }
-        .nav-tabs .nav-link.active {
-            background: linear-gradient(135deg, #f3f4f6, #ffffff);
-            border-bottom: none;
-        }
-        .search-results img {
-            width: 224px;
-            height: 224px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-        
-        .result-card {
-            margin: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            text-align: center;
-            width: 240px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        .search-results {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin-top: 20px;
-        }
-        
-        .query-image {
-            width: 224px;
-            height: 224px;
-            object-fit: cover;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-        
-        /* Upload Preview */
-        #uploadPreview img {
-            max-height: 300px;
+        .preview-image {
             max-width: 100%;
+            max-height: 300px;
+            margin: 20px auto;
+            display: block;
             border-radius: 5px;
         }
-        
-        /* CSS for search results */
-        #search-results {
-            margin-top: 20px;
-            border-top: 1px solid #dee2e6;
-            padding-top: 20px;
+        .card-img-top {
+            height: 200px;
+            object-fit: cover;
         }
-        
-        #search-results .card-header {
-            background-color: #f8f9fa;
+        .loading {
+            text-align: center;
+            padding: 30px;
+        }
+        .btn-primary {
+            background-color: #007bff;
+            border: none;
+            margin-bottom: 10px;
+        }
+        .btn-success {
+            background-color: #28a745;
+            border: none;
+        }
+        .btn-block {
+            padding: 12px;
+            font-size: 16px;
+        }
+        .nav-tabs {
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
             font-weight: 500;
-        }
-        
-        #search-results .list-group-item {
-            display: flex;
-            justify-content: space-between;
         }
     </style>
 </head>
 <body>
-    <div class="header text-center">
-
-    </div>
-
-    <div class="container mt-5">
-        <ul class="nav nav-tabs" id="mainTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="search-tab" data-bs-toggle="tab" data-bs-target="#search" type="button" role="tab" aria-controls="search" aria-selected="true">Tìm kiếm</button>
+    <div class="container">
+        <h1>Hệ thống Tìm kiếm Khuôn mặt</h1>
+        
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" id="search-tab" data-toggle="tab" href="#search" role="tab" aria-controls="search" aria-selected="true">Tìm kiếm</a>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="database-tab" data-bs-toggle="tab" data-bs-target="#database" type="button" role="tab" aria-controls="database" aria-selected="false">Quản lý CSDL</button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link" href="/features">Xem đặc trưng</a>
+            <li class="nav-item">
+                <a class="nav-link" id="database-tab" data-toggle="tab" href="#database" role="tab" aria-controls="database" aria-selected="false">Quản lý CSDL</a>
             </li>
         </ul>
         
-        <div class="tab-content" id="mainTabContent">
-            <!-- Tab tìm kiếm -->
+        <div class="tab-content" id="myTabContent">
+            <!-- Search Tab -->
             <div class="tab-pane fade show active" id="search" role="tabpanel" aria-labelledby="search-tab">
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <h3>Tìm kiếm khuôn mặt tương tự</h3>
-                        <p>Tải lên ảnh chứa khuôn mặt để tìm kiếm những khuôn mặt tương tự trong cơ sở dữ liệu.</p>
-                        
-                        <form id="searchForm" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="imageUpload" class="form-label">Chọn ảnh</label>
-                                <input class="form-control" type="file" id="imageUpload" name="file" accept="image/*">
+                <div class="row">
+                    <div class="col-md-12">
+                        <!-- Khu vực tải ảnh đơn giản -->
+                        <div class="text-center mb-4">
+                            <button type="button" class="btn btn-primary btn-block" id="selectImageBtn">
+                                <i class="fas fa-image mr-2"></i>Chọn ảnh từ máy tính
+                            </button>
+                            
+                            <div id="previewContainer" style="display: none;">
+                                <img id="previewImage" class="preview-image" src="" alt="Preview">
+                                <button class="btn btn-sm btn-danger mt-2" id="removePreview">
+                                    <i class="fas fa-trash-alt mr-1"></i>Xóa ảnh
+                                </button>
                             </div>
-                            <button type="submit" class="btn btn-primary">Tìm kiếm</button>
-                        </form>
-                        
-                        <div id="uploadPreview" class="mt-3 text-center d-none">
-                            <h5>Ảnh đã chọn:</h5>
-                            <img id="previewImage" class="img-fluid" style="max-height: 300px;">
+                            
+                            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                            
+                            <button class="btn btn-success btn-block mt-4" id="searchButton" disabled>
+                                <i class="fas fa-search mr-1"></i>Tìm kiếm
+                            </button>
                         </div>
                         
-                        <!-- Kết quả tìm kiếm -->
-                        <div id="search-results" class="mt-4"></div>
+                        <div id="searchResults">
+                            <div class="text-center text-muted py-5">
+                                <h5>Tải lên ảnh khuôn mặt để tìm kiếm</h5>
+                            </div>
+                        </div>
+                        
+                        <div id="loading" class="loading" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="sr-only">Đang xử lý...</span>
+                            </div>
+                            <p class="mt-2">Đang xử lý, vui lòng đợi...</p>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <!-- Tab quản lý CSDL -->
+            <!-- Database Management Tab -->
             <div class="tab-pane fade" id="database" role="tabpanel" aria-labelledby="database-tab">
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <i class="fas fa-database me-2"></i> Quản lý Cơ sở dữ liệu
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-database mr-2"></i>Xây dựng cơ sở dữ liệu</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Tạo cơ sở dữ liệu từ thư mục chứa ảnh khuôn mặt.</p>
+                                <div class="form-group">
+                                    <label for="folderPath">Đường dẫn thư mục:</label>
+                                    <input type="text" class="form-control" id="folderPath" placeholder="Ví dụ: /path/to/faces">
+                                </div>
+                                <button class="btn btn-success" id="buildDatabaseButton">
+                                    <i class="fas fa-cogs mr-1"></i>Xây dựng CSDL
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <p>Xây dựng cơ sở dữ liệu đặc trưng khuôn mặt từ các ảnh hiện có. Quá trình này sẽ trích xuất thông tin về cảm xúc, tuổi và màu da từ mỗi khuôn mặt.</p>
-                        <button id="buildDatabaseBtn" class="btn btn-primary btn-lg w-100 mb-2">
-                            <i class="fas fa-cogs me-2"></i> Xây dựng CSDL
-                        </button>
-                        <button id="clearDatabaseBtn" class="btn btn-danger btn-lg w-100">
-                            <i class="fas fa-trash-alt me-2"></i> Xóa CSDL
-                        </button>
-                        <div id="buildStatus" class="mt-3"></div>
+                    
+                    <div class="col-md-6">
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5><i class="fas fa-trash-alt mr-2"></i>Xóa cơ sở dữ liệu</h5>
+                            </div>
+                            <div class="card-body">
+                                <p>Xóa tất cả dữ liệu từ cơ sở dữ liệu.</p>
+                                <div class="alert alert-warning">
+                                    <strong>Cảnh báo!</strong> Hành động này không thể hoàn tác.
+                                </div>
+                                <button class="btn btn-danger" id="clearDatabaseButton">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>Xóa CSDL
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                
+                <div id="databaseLoading" class="loading" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Đang xử lý...</span>
+                    </div>
+                    <p class="mt-2">Đang xử lý, vui lòng đợi...</p>
+                </div>
+                
+                <div id="databaseMessage" class="alert" style="display: none;"></div>
             </div>
         </div>
     </div>
-
-    <footer class="mt-5 py-3 text-center text-muted">
-        <div class="container">
-
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Translation functions
-        function translateEmotion(emotion) {
-            const translations = {
-                'happy': 'Vui vẻ',
-                'sad': 'Buồn',
-                'angry': 'Giận dữ',
-                'fear': 'Sợ hãi',
-                'disgust': 'Ghê tởm',
-                'surprise': 'Ngạc nhiên',
-                'neutral': 'Trung tính'
-            };
-            return translations[emotion] || emotion;
-        }
-        
-        function translateAgeGroup(ageGroup) {
-            const translations = {
-                'child': 'Trẻ em',
-                'teen': 'Thanh thiếu niên',
-                'adult': 'Người lớn',
-                'senior': 'Người cao tuổi'
-            };
-            return translations[ageGroup] || ageGroup;
-        }
-        
-        function translateSkinColor(skinColor) {
-            const translations = {
-                'White': 'Trắng',
-                'Yellow': 'Vàng',
-                'Black': 'Đen',
-                'unknown': 'Không xác định'
-            };
-            return translations[skinColor] || skinColor;
-        }
-        
-        // Document ready event handler
-        document.addEventListener('DOMContentLoaded', function() {
-            // Image preview functionality
-            const imageUpload = document.getElementById('imageUpload');
-            const previewImage = document.getElementById('previewImage');
-            const uploadPreview = document.getElementById('uploadPreview');
-            
-            imageUpload.addEventListener('change', function() {
-                if (this.files && this.files[0]) {
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        previewImage.src = e.target.result;
-                        uploadPreview.classList.remove('d-none');
-                    }
-                    
-                    reader.readAsDataURL(this.files[0]);
-                }
-            });
-            
-            // Handle search form submission
-            const searchForm = document.getElementById('searchForm');
-            
-            searchForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(this);
-                const searchResults = document.getElementById('search-results');
-                
-                // Show loading indicator
-                searchResults.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div><p>Đang tìm kiếm...</p></div>';
-                
-                // Send request to server
-                fetch('/search', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Pass the data to display function
-                    displaySearchResults(data);
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    searchResults.innerHTML = '<div class="alert alert-danger">Đã xảy ra lỗi khi tìm kiếm. Vui lòng thử lại sau.</div>';
-                });
-            });
-            
-            // Handle buildDatabase button click
-            const buildDatabaseBtn = document.getElementById('buildDatabaseBtn');
-            const clearDatabaseBtn = document.getElementById('clearDatabaseBtn');
-            const buildStatus = document.getElementById('buildStatus');
-            
-            buildDatabaseBtn.addEventListener('click', function() {
-                // Disable button and show processing state
-                buildDatabaseBtn.disabled = true;
-                buildDatabaseBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang xây dựng...';
-                buildStatus.innerHTML = '<div class="alert alert-info">Đang xây dựng cơ sở dữ liệu, vui lòng đợi...</div>';
-                
-                // Send request to server
-                fetch('/build-database', {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        buildStatus.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-                    } else {
-                        buildStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Có lỗi xảy ra'}</div>`;
-                    }
-                    
-                    // Re-enable button
-                    buildDatabaseBtn.disabled = false;
-                    buildDatabaseBtn.innerHTML = '<i class="fas fa-cogs me-2"></i> Xây dựng CSDL';
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    buildStatus.innerHTML = '<div class="alert alert-danger">Đã xảy ra lỗi khi xây dựng cơ sở dữ liệu. Vui lòng thử lại sau.</div>';
-                    
-                    // Re-enable button
-                    buildDatabaseBtn.disabled = false;
-                    buildDatabaseBtn.innerHTML = '<i class="fas fa-cogs me-2"></i> Xây dựng CSDL';
-                });
-            });
-            
-            // Handle clearDatabase button click
-            clearDatabaseBtn.addEventListener('click', function() {
-                // Hiển thị thông báo xác nhận
-                if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trong cơ sở dữ liệu? Hành động này không thể hoàn tác.')) {
-                    return; // Nếu người dùng không xác nhận, dừng xử lý
-                }
-                
-                // Disable button and show processing state
-                clearDatabaseBtn.disabled = true;
-                clearDatabaseBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Đang xóa...';
-                buildStatus.innerHTML = '<div class="alert alert-info">Đang xóa cơ sở dữ liệu, vui lòng đợi...</div>';
-                
-                // Send request to server
-                fetch('/clear-database', {
-                    method: 'POST'
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        buildStatus.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
-                    } else {
-                        buildStatus.innerHTML = `<div class="alert alert-danger">${data.message || 'Có lỗi xảy ra'}</div>`;
-                    }
-                    
-                    // Re-enable button
-                    clearDatabaseBtn.disabled = false;
-                    clearDatabaseBtn.innerHTML = '<i class="fas fa-trash-alt me-2"></i> Xóa CSDL';
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    buildStatus.innerHTML = '<div class="alert alert-danger">Đã xảy ra lỗi khi xóa cơ sở dữ liệu. Vui lòng thử lại sau.</div>';
-                    
-                    // Re-enable button
-                    clearDatabaseBtn.disabled = false;
-                    clearDatabaseBtn.innerHTML = '<i class="fas fa-trash-alt me-2"></i> Xóa CSDL';
-                });
-            });
-        });
-        
-        // Function to display search results
-        function displaySearchResults(data) {
-            const resultsContainer = document.getElementById('search-results');
-            resultsContainer.innerHTML = '';
-            
-            if (!data || !data.query_image || !data.results) {
-                resultsContainer.innerHTML = '<p>Không tìm thấy kết quả</p>';
-                return;
-            }
-            
-            // Create container for results
-            const resultsWrapper = document.createElement('div');
-            resultsWrapper.className = 'search-results-wrapper';
-            
-            // Create heading
-            const heading = document.createElement('h4');
-            heading.textContent = 'Kết quả tìm kiếm';
-            heading.className = 'mb-4';
-            resultsWrapper.appendChild(heading);
-            
-            // Create query image row
-            const queryRow = document.createElement('div');
-            queryRow.className = 'row mb-4';
-            
-            // Query image column
-            const queryImageCol = document.createElement('div');
-            queryImageCol.className = 'col-md-3';
-            
-            // Create query image
-            const queryImage = document.createElement('img');
-            queryImage.src = 'data:image/jpeg;base64,' + data.query_image;
-            queryImage.alt = 'Ảnh tìm kiếm';
-            queryImage.className = 'query-image img-fluid';
-            queryImage.style.width = '224px';
-            queryImage.style.height = '224px';
-            queryImage.style.objectFit = 'cover';
-            
-            queryImageCol.appendChild(queryImage);
-            
-            // Query features column
-            const queryFeaturesCol = document.createElement('div');
-            queryFeaturesCol.className = 'col-md-9';
-            
-            // Create features card
-            const featuresCard = document.createElement('div');
-            featuresCard.className = 'card';
-            
-            // Card header
-            const cardHeader = document.createElement('div');
-            cardHeader.className = 'card-header';
-            cardHeader.textContent = 'Đặc trưng khuôn mặt tìm kiếm';
-            
-            // Card body
-            const cardBody = document.createElement('div');
-            cardBody.className = 'card-body';
-            
-            // Features table
-            const featuresTable = document.createElement('table');
-            featuresTable.className = 'table';
-            
-            // Table body
-            const tableBody = document.createElement('tbody');
-            
-            // Add feature rows
-            if (data.query_features) {
-                const features = data.query_features;
-                
-                // Age row
-                const ageRow = document.createElement('tr');
-                const ageLabelCell = document.createElement('th');
-                ageLabelCell.textContent = 'Tuổi:';
-                const ageValueCell = document.createElement('td');
-                ageValueCell.textContent = features.age || 'Không xác định';
-                ageRow.appendChild(ageLabelCell);
-                ageRow.appendChild(ageValueCell);
-                tableBody.appendChild(ageRow);
-                
-                // Emotion row
-                const emotionRow = document.createElement('tr');
-                const emotionLabelCell = document.createElement('th');
-                emotionLabelCell.textContent = 'Cảm xúc:';
-                const emotionValueCell = document.createElement('td');
-                emotionValueCell.textContent = translateEmotion(features.emotion) || 'Không xác định';
-                emotionRow.appendChild(emotionLabelCell);
-                emotionRow.appendChild(emotionValueCell);
-                tableBody.appendChild(emotionRow);
-                
-                // Skin color row
-                const skinColorRow = document.createElement('tr');
-                const skinColorLabelCell = document.createElement('th');
-                skinColorLabelCell.textContent = 'Màu da:';
-                const skinColorValueCell = document.createElement('td');
-                skinColorValueCell.textContent = translateSkinColor(features.skin_color) || 'Không xác định';
-                skinColorRow.appendChild(skinColorLabelCell);
-                skinColorRow.appendChild(skinColorValueCell);
-                tableBody.appendChild(skinColorRow);
-            }
-            
-            // Add table to card
-            featuresTable.appendChild(tableBody);
-            cardBody.appendChild(featuresTable);
-            featuresCard.appendChild(cardHeader);
-            featuresCard.appendChild(cardBody);
-            queryFeaturesCol.appendChild(featuresCard);
-            
-            // Add columns to row
-            queryRow.appendChild(queryImageCol);
-            queryRow.appendChild(queryFeaturesCol);
-            
-            // Add query row to results
-            resultsWrapper.appendChild(queryRow);
-            
-            // Create similar images heading
-            const similarHeading = document.createElement('h5');
-            similarHeading.textContent = 'Khuôn mặt tương tự';
-            similarHeading.className = 'mt-4 mb-3';
-            resultsWrapper.appendChild(similarHeading);
-            
-            // Create similar images row
-            const similarRow = document.createElement('div');
-            similarRow.className = 'row';
-            
-            // Add similar faces
-            data.results.forEach((result, index) => {
-                // Create column for each similar face
-                const similarCol = document.createElement('div');
-                similarCol.className = 'col-md-4 mb-4';
-                
-                // Create card
-                const similarCard = document.createElement('div');
-                similarCard.className = 'card h-100';
-                
-                // Card header with similarity score
-                const similarHeader = document.createElement('div');
-                similarHeader.className = 'card-header d-flex justify-content-between align-items-center';
-                
-                const matchLabel = document.createElement('span');
-                matchLabel.textContent = `Kết quả #${index + 1}`;
-                
-                const similarityBadge = document.createElement('span');
-                similarityBadge.className = 'badge bg-primary';
-                
-                // Hiển thị phần trăm tương đồng dựa trên total_score
-                let scoreValue = result.total_score;
-                
-                // Nếu không có total_score, có thể là phiên bản rất cũ của API
-                if (scoreValue === undefined) {
-                    console.warn('No total_score found in result, using default 0');
-                    scoreValue = 0;
-                }
-                
-                // Đảm bảo giá trị nằm trong khoảng 0-1
-                if (scoreValue > 1) {
-                    console.warn(`Total score value (${scoreValue}) is greater than 1, normalizing to range 0-1`);
-                    scoreValue = 1.0;
-                } else if (scoreValue < 0) {
-                    console.warn(`Total score value (${scoreValue}) is less than 0, normalizing to 0`);
-                    scoreValue = 0.0;
-                }
-                similarityBadge.textContent = `${(scoreValue * 100).toFixed(2)}%`;
-                
-                similarHeader.appendChild(matchLabel);
-                similarHeader.appendChild(similarityBadge);
-                
-                // Card body
-                const similarBody = document.createElement('div');
-                similarBody.className = 'card-body';
-                
-                // Image
-                const similarImg = document.createElement('img');
-                similarImg.src = 'data:image/jpeg;base64,' + result.image;
-                similarImg.alt = 'Khuôn mặt tương tự';
-                similarImg.className = 'img-fluid mb-3';
-                similarImg.style.width = '224px';
-                similarImg.style.height = '224px';
-                similarImg.style.objectFit = 'cover';
-                similarBody.appendChild(similarImg);
-                
-                // Create features list
-                const featuresList = document.createElement('ul');
-                featuresList.className = 'list-group list-group-flush';
-                
-                // Add features
-                const emotion = document.createElement('li');
-                emotion.className = 'list-group-item';
-                emotion.innerHTML = `<strong>Cảm xúc:</strong> ${translateEmotion(result.features.emotion)}`;
-                featuresList.appendChild(emotion);
-                
-                const age = document.createElement('li');
-                age.className = 'list-group-item';
-                age.innerHTML = `<strong>Tuổi:</strong> ${result.features.age}`;
-                featuresList.appendChild(age);
-                
-                const skinColor = document.createElement('li');
-                skinColor.className = 'list-group-item';
-                skinColor.innerHTML = `<strong>Màu da:</strong> ${translateSkinColor(result.features.skin_color)}`;
-                featuresList.appendChild(skinColor);
-                
-                // Add features to card
-                similarCard.appendChild(similarHeader);
-                similarCard.appendChild(similarBody);
-                similarCard.appendChild(featuresList);
-                
-                // Add card to column
-                similarCol.appendChild(similarCard);
-                
-                // Add column to row
-                similarRow.appendChild(similarCol);
-            });
-            
-            // Add similar row to results
-            resultsWrapper.appendChild(similarRow);
-            
-            // Add all results to container
-            resultsContainer.appendChild(resultsWrapper);
-        }
-    </script>
+    
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="/static/js/main.js"></script>
 </body>
-</html> 
+</html>
