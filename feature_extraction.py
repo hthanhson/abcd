@@ -295,11 +295,12 @@ def extract_features(image_path=None, image_array=None):
         face_encoding = create_face_encoding(face_image)
         result['face_encoding'] = face_encoding
         
-        # Detect gender and create gender vector (16-dimensional)
-        gender, gender_confidence = detect_gender(face_image)
+        # Detect gender and create gender vector (16-dimensional) 
+        # Sử dụng face_encoding để cải thiện độ chính xác của phát hiện giới tính
+        gender, gender_confidence = detect_gender(face_image, face_encoding=face_encoding)
         result['gender'] = gender
         result['gender_confidence'] = gender_confidence
-        gender_vector = get_gender_vector(face_image)
+        gender_vector = get_gender_vector(face_image, face_encoding=face_encoding)
         result['gender_vector'] = gender_vector
         
         # Detect skin color and create skin vector (16-dimensional)
