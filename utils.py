@@ -2,124 +2,62 @@ import os
 import cv2
 import numpy as np
 
-def translate_gender(gender, to_vietnamese=True):
+def translate_gender(gender):
     """
-    Translate gender between English and Vietnamese
+    Chuyển đổi giới tính từ tiếng Anh sang tiếng Việt
     
     Args:
-        gender: Gender string to translate
-        to_vietnamese: Whether to translate to Vietnamese (True) or English (False)
+        gender: Chuỗi giới tính cần chuyển đổi
         
     Returns:
-        str: Translated gender string
+        str: Chuỗi giới tính đã được chuyển sang tiếng Việt
     """
-    if to_vietnamese:
-        # English to Vietnamese
-        translations = {
-            'Man': 'Nam',
-            'Woman': 'Nữ',
-            'Unknown': 'Không xác định'
-        }
-        return translations.get(gender, 'Không xác định')
-    else:
-        # Vietnamese to English
-        translations = {
-            'Nam': 'Man',
-            'Nữ': 'Woman',
-            'Không xác định': 'Unknown'
-        }
-        return translations.get(gender, 'Unknown')
+    # Bảng chuyển đổi từ tiếng Anh sang tiếng Việt
+    translations = {
+        'Man': 'Nam',
+        'Woman': 'Nữ',
+        'Unknown': 'Không xác định'
+    }
+    return translations.get(gender, 'Không xác định')
 
-def translate_emotion(emotion, to_vietnamese=True):
+def translate_emotion(emotion):
     """
-    Translate emotion between English and Vietnamese
+    Chuyển đổi cảm xúc từ tiếng Anh sang tiếng Việt
     
     Args:
-        emotion: Emotion string to translate
-        to_vietnamese: Whether to translate to Vietnamese (True) or English (False)
+        emotion: Chuỗi cảm xúc cần chuyển đổi
         
     Returns:
-        str: Translated emotion string
+        str: Chuỗi cảm xúc đã được chuyển sang tiếng Việt
     """
-    if to_vietnamese:
-        # English to Vietnamese
-        translations = {
-            'Angry': 'Tức giận',
-            'Disgusted': 'Ghê tởm',
-            'Fearful': 'Sợ hãi',
-            'Happy': 'Vui vẻ',
-            'Sad': 'Buồn bã',
-            'Surprised': 'Ngạc nhiên',
-            'Neutral': 'Trung tính',
-            'Unknown': 'Không xác định'
-        }
-        return translations.get(emotion, 'Không xác định')
-    else:
-        # Vietnamese to English
-        translations = {
-            'Tức giận': 'Angry',
-            'Ghê tởm': 'Disgusted',
-            'Sợ hãi': 'Fearful',
-            'Vui vẻ': 'Happy',
-            'Buồn bã': 'Sad',
-            'Ngạc nhiên': 'Surprised',
-            'Trung tính': 'Neutral',
-            'Không xác định': 'Unknown'
-        }
-        return translations.get(emotion, 'Unknown')
+    # Bảng chuyển đổi từ tiếng Anh sang tiếng Việt
+    translations = {
+        'Angry': 'Tức giận',
+        'Disgusted': 'Ghê tởm',
+        'Fearful': 'Sợ hãi',
+        'Happy': 'Vui vẻ',
+        'Sad': 'Buồn bã',
+        'Surprised': 'Ngạc nhiên',
+        'Neutral': 'Trung tính',
+        'Unknown': 'Không xác định'
+    }
+    return translations.get(emotion, 'Không xác định')
 
-def translate_skin_color(skin_color, to_vietnamese=True):
+def translate_skin_color(skin_color):
     """
-    Translate skin color between English and Vietnamese
+    Chuyển đổi màu da từ tiếng Anh sang tiếng Việt
     
     Args:
-        skin_color: Skin color string to translate
-        to_vietnamese: Whether to translate to Vietnamese (True) or English (False)
+        skin_color: Chuỗi màu da cần chuyển đổi
         
     Returns:
-        str: Translated skin color string
+        str: Chuỗi màu da đã được chuyển sang tiếng Việt
     """
-    if to_vietnamese:
-        # English to Vietnamese
-        translations = {
-            'White': 'Trắng',
-            'Black': 'Đen',
-            'Yellow': 'Vàng',
-            'Unknown': 'Không xác định'
-        }
-        return translations.get(skin_color, 'Không xác định')
-    else:
-        # Vietnamese to English
-        translations = {
-            'Trắng': 'White',
-            'Đen': 'Black',
-            'Vàng': 'Yellow',
-            'Không xác định': 'Unknown'
-        }
-        return translations.get(skin_color, 'Unknown')
-
-def format_similarity(similarity, decimal_places=2):
-    """
-    Format similarity score as percentage string
-    
-    Args:
-        similarity: Similarity score (0-1)
-        decimal_places: Number of decimal places to include
-        
-    Returns:
-        str: Formatted similarity percentage string
-    """
-    return f"{similarity * 100:.{decimal_places}f}%"
-
-def validate_image_file(filename):
-    """
-    Validate if a file is an allowed image type
-    
-    Args:
-        filename: Name of file to validate
-        
-    Returns:
-        bool: True if file is an allowed image type, False otherwise
-    """
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp'}
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS 
+    # Bảng chuyển đổi từ tiếng Anh sang tiếng Việt
+    translations = {
+        'White': 'Trắng',
+        'Black': 'Đen',
+        'Yellow': 'Vàng',
+        'Unknown': 'Không xác định'
+    }
+    return translations.get(skin_color, 'Không xác định') 

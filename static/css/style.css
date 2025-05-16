@@ -51,7 +51,7 @@ body {
     background-color: #fff;
     padding: 30px;
     text-align: center;
-    cursor: pointer;
+   
     transition: all 0.3s ease;
     margin-bottom: 20px;
     position: relative;
@@ -116,7 +116,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    cursor: pointer;
+   
     z-index: 10;
 }
 
@@ -128,7 +128,7 @@ body {
     padding: 8px 15px;
     border-radius: 5px;
     margin-top: 10px;
-    cursor: pointer;
+    
     transition: all 0.3s ease;
 }
 

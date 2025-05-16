@@ -296,11 +296,6 @@ def get_features_api():
             'error': f'Lỗi khi lấy đặc trưng: {str(e)}'
         })
 
-@app.route('/test-search')
-def test_search():
-    """Render the test search page"""
-    return render_template('test_search.html')
-
 @app.route('/simple')
 def simple_search():
     """Render the simple search page"""

@@ -193,4 +193,37 @@ Mỗi loại đặc trưng (giới tính, màu da, cảm xúc) được biểu d
 15. **Chỉ số đồng nhất cảm xúc**: Mức độ phát hiện cùng một cảm xúc từ các đặc trưng khác nhau
 16. **Hệ số tin cậy của cảm xúc**: Mức độ tin cậy trong dự đoán cảm xúc
 
-## Giấy Phép
+## Chi Tiết Chức Năng Của Từng Hàm
+
+### database.py
+- `connect_to_database()`: Kết nối với cơ sở dữ liệu MySQL với cơ chế thử lại, trả về đối tượng kết nối hoặc None nếu không thành công.
+- `execute_query(connection, query, params=None)`: Thực thi câu truy vấn SQL với tham số tùy chọn, trả về kết quả truy vấn hoặc số hàng bị ảnh hưởng.
+- `add_image_to_database(image_path, features)`: Thêm hình ảnh và các đặc trưng vào cơ sở dữ liệu, bao gồm mã hóa khuôn mặt, giới tính, màu da, cảm xúc và vector đặc trưng.
+- `delete_image_from_database(image_path)`: Xóa hình ảnh và tất cả đặc trưng liên quan khỏi cơ sở dữ liệu.
+- `clear_database()`: Xóa tất cả dữ liệu từ các bảng trong cơ sở dữ liệu và đặt lại giá trị auto-increment.
+- `build_database(folder_path)`: Xây dựng cơ sở dữ liệu từ thư mục chứa hình ảnh, trích xuất đặc trưng và thêm vào cơ sở dữ liệu.
+
+- `find_similar_faces(query_features, top_n=3, filters=None)`: Tìm top n khuôn mặt tương tự trong cơ sở dữ liệu dựa trên vector 176 chiều kết hợp, có thể áp dụng bộ lọc.
+- `get_all_features()`: Lấy tất cả các đặc trưng duy nhất từ cơ sở dữ liệu để phục vụ lọc (giới tính, màu da, cảm xúc).
+
+### emotion_detection.py
+- `get_image_hash(image)`: Tạo mã hash duy nhất cho hình ảnh để lưu vào bộ nhớ đệm.
+- `detect_emotion(face_image, force_recalculate=False)`: Phát hiện cảm xúc từ ảnh khuôn mặt, tối ưu cho ảnh đầu vào 224x224, với khả năng phát hiện khẩu hình cải tiến và giảm độ thiên vị trung tính.
+- `get_emotion_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho cảm xúc từ ảnh khuôn mặt.
+
+### feature_extraction.py
+- `extract_face(image)`: Trích xuất vùng khuôn mặt từ một ảnh bằng OpenCV, sử dụng cascade classifier.
+- `create_face_encoding(face_image)`: Tạo vector mã hóa 128 chiều cho khuôn mặt sử dụng OpenCV.
+- `extract_features(image_path=None, image_array=None)`: Trích xuất tất cả đặc trưng từ ảnh và tạo vector 176 chiều kết hợp, bao gồm mã hóa khuôn mặt (128), vector giới tính (16), vector màu da (16), và vector cảm xúc (16).
+
+### gender_detection.py
+- `get_image_hash(image)`: Tạo mã hash duy nhất cho hình ảnh để lưu vào bộ nhớ đệm.
+- `logistic_transition(value, low, high, steepness=10)`: Tính toán sự chuyển đổi mượt mà giữa 0 và 1 sử dụng hàm logistic.
+- `detect_gender(face_image, force_recalculate=False)`: Phát hiện giới tính từ ảnh khuôn mặt với phân tích đặc trưng cân bằng, tối ưu cho ảnh đầu vào 224x224, với độ nhất quán được cải thiện.
+- `get_gender_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho giới tính từ ảnh khuôn mặt.
+
+### skin_classification.py
+- `classify_skin_color(face_image)`: Phân loại màu da từ ảnh khuôn mặt, trả về loại màu da và độ tin cậy.
+- `get_skin_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho màu da từ ảnh khuôn mặt.
+
+

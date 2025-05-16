@@ -480,11 +480,3 @@ def get_emotion_vector(face_image, vector_length=16):
         print(f"Error creating emotion vector: {e}")
     
     return emotion_vector
-
-def clear_emotion_cache():
-    """
-    Xóa bộ nhớ đệm kết quả cảm xúc
-    """
-    global _emotion_cache
-    _emotion_cache = {}
-    print("Emotion detection cache cleared")

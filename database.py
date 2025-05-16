@@ -5,13 +5,31 @@ import cv2
 from feature_extraction import extract_features
 import mysql.connector
 from mysql.connector import Error
-import pickle
 from datetime import datetime
 import scipy.spatial.distance as spatial
 import db_config
 import time
 
-# Kết nối với database
+# Thêm hàm trợ giúp kiểm tra kết nối
+def is_connection_valid(connection):
+    """
+    Kiểm tra xem kết nối MySQL có hợp lệ và kết nối hay không
+    
+    Args:
+        connection: Đối tượng kết nối MySQL
+        
+    Returns:
+        bool: True nếu kết nối hợp lệ và đang kết nối, False nếu không
+    """
+    if connection is None:
+        return False
+    
+    try:
+        return connection.is_connected()
+    except:
+        return False
+        
+# Điều chỉnh hàm connect_to_database để đảm bảo phần xử lý lỗi và đóng kết nối được xử lý đúng
 def connect_to_database():
     """
     Connect to MySQL database with retry logic
@@ -34,11 +52,10 @@ def connect_to_database():
                 connection_timeout=db_config.DB_TIMEOUT
             )
             
-            # Test the connection
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1")
-            cursor.fetchone()
-            cursor.close()
+            # Test the connection with direct query
+            conn.cmd_query("SELECT 1")
+            # Lấy kết quả (không nhất thiết phải lưu)
+            conn.get_rows()
             
             print(f"Successfully connected to database {db_config.DB_NAME} on {db_config.DB_HOST}")
             return conn
@@ -54,6 +71,67 @@ def connect_to_database():
     
     print(f"All {db_config.DB_MAX_RETRIES} connection attempts failed. Last error: {last_error}")
     return None
+
+def execute_query(connection, query, params=None):
+    """
+   
+    Args:
+        connection: Kết nối MySQL
+        query: Câu truy vấn SQL
+        params: Tham số cho truy vấn (tuple)
+        
+    Returns:
+        list: Kết quả cho truy vấn SELECT/SHOW
+        bool: True cho các truy vấn INSERT/UPDATE/DELETE thành công
+        None: Nếu có lỗi xảy ra
+    """
+    # Kiểm tra kết nối có hợp lệ không
+    if not is_connection_valid(connection):
+        print("Connection is invalid or not connected, cannot execute query")
+        return None
+    
+    try:
+        # Chuẩn bị câu truy vấn với tham số
+        if params:
+            prepared_query = query
+            for param in params:
+                # Xử lý các loại dữ liệu khác nhau
+                if isinstance(param, str):
+                    param_value = f"'{param}'"
+                elif param is None:
+                    param_value = 'NULL'
+                else:
+                    param_value = str(param)
+                
+                # Thay thế %s đầu tiên bằng giá trị tham số
+                prepared_query = prepared_query.replace('%s', param_value, 1)
+        else:
+            prepared_query = query
+        
+        # Xác định loại truy vấn
+        is_select = prepared_query.strip().upper().startswith('SELECT')
+        is_show = prepared_query.strip().upper().startswith('SHOW')
+        
+        # Thực hiện truy vấn trực tiếp thông qua connection
+        connection.cmd_query(prepared_query)
+        
+        if is_select or is_show:
+            result = connection.get_rows()
+            if result:
+                rows = result[0]  # get_rows() trả về tuple (rows, eof)
+                return rows
+            return []
+            
+        # Đối với các truy vấn INSERT, UPDATE, DELETE, chỉ trả về True nếu thành công
+        # (chúng ta đã đến đây mà không có lỗi nào, nên truy vấn đã thành công)
+        return True
+        
+    except Error as e:
+        print(f"Error executing query: {e}")
+        print(f"Query: {query}")
+        if params:
+            print(f"Params: {params}")
+        return None
 
 def add_image_to_database(image_path, features):
     """
@@ -72,87 +150,116 @@ def add_image_to_database(image_path, features):
         if conn is None:
             return False
         
-        cursor = conn.cursor()
-        
         # Insert into images table
-        query = """
+        query = f"""
         INSERT INTO images (image_path, added_date)
-        VALUES (%s, %s)
+        VALUES ('{image_path}', '{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
         """
-        added_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute(query, (image_path, added_date))
         
-        # Get the image_id
-        image_id = cursor.lastrowid
+        # Thực hiện truy vấn
+        insert_result = execute_query(conn, query)
+        if insert_result is None:  # Nếu insert thất bại
+            print("Failed to insert image into database")
+            conn.close()
+            return False
+        
+        # Get the image_id - MySQL sẽ trả về ID cuối cùng được chèn vào
+        query_id = "SELECT LAST_INSERT_ID()"
+        result = execute_query(conn, query_id)
+        if not result or len(result) == 0:
+            print("Failed to get last insert ID")
+            conn.close()
+            return False
+            
+        image_id = result[0][0]
         
         # Insert into face_encodings table
         if features['face_encoding'] is not None:
-            query = """
-            INSERT INTO face_encodings (image_id, face_encoding)
-            VALUES (%s, %s)
-            """
             face_encoding_json = json.dumps(features['face_encoding'].tolist())
-            cursor.execute(query, (image_id, face_encoding_json))
+            query = f"""
+            INSERT INTO face_encodings (image_id, face_encoding)
+            VALUES ({image_id}, '{face_encoding_json}')
+            """
+            if execute_query(conn, query) is None:
+                print("Failed to insert face encoding")
+                conn.close()
+                return False
         
         # Insert into genders table
         if features['gender'] is not None:
-            query = """
+            query = f"""
             INSERT INTO genders (image_id, gender_type, confidence_value)
-            VALUES (%s, %s, %s)
+            VALUES ({image_id}, '{features['gender']}', {features['gender_confidence']})
             """
-            cursor.execute(query, (image_id, features['gender'], features['gender_confidence']))
+            if execute_query(conn, query) is None:
+                print("Failed to insert gender")
+                conn.close()
+                return False
         
         # Insert into skin_colors table
         if features['skin_color'] is not None:
-            query = """
+            query = f"""
             INSERT INTO skin_colors (image_id, skin_color_type)
-            VALUES (%s, %s)
+            VALUES ({image_id}, '{features['skin_color']}')
             """
-            cursor.execute(query, (image_id, features['skin_color']))
+            if execute_query(conn, query) is None:
+                print("Failed to insert skin color")
+                conn.close()
+                return False
         
         # Insert into emotions table
         if features['emotion'] is not None:
-            query = """
+            query = f"""
             INSERT INTO emotions (image_id, emotion_type)
-            VALUES (%s, %s)
+            VALUES ({image_id}, '{features['emotion']}')
             """
-            cursor.execute(query, (image_id, features['emotion']))
+            if execute_query(conn, query) is None:
+                print("Failed to insert emotion")
+                conn.close()
+                return False
         
         # Insert into feature_vectors table
         if features['gender_vector'] is not None and features['skin_vector'] is not None and \
            features['emotion_vector'] is not None and features['combined_vector'] is not None:
-            query = """
-            INSERT INTO feature_vectors (
-                image_id, gender_vector, skin_vector, 
-                emotion_vector, combined_vector
-            )
-            VALUES (%s, %s, %s, %s, %s)
-            """
-            
             gender_vector_json = json.dumps(features['gender_vector'].tolist())
             skin_vector_json = json.dumps(features['skin_vector'].tolist())
             emotion_vector_json = json.dumps(features['emotion_vector'].tolist())
             combined_vector_json = json.dumps(features['combined_vector'].tolist())
             
-            cursor.execute(query, (
-                image_id, 
-                gender_vector_json, 
-                skin_vector_json, 
-                emotion_vector_json, 
-                combined_vector_json
-            ))
+            query = f"""
+            INSERT INTO feature_vectors (
+                image_id, gender_vector, skin_vector, 
+                emotion_vector, combined_vector
+            )
+            VALUES (
+                {image_id}, 
+                '{gender_vector_json}', 
+                '{skin_vector_json}', 
+                '{emotion_vector_json}', 
+                '{combined_vector_json}'
+            )
+            """
+            if execute_query(conn, query) is None:
+                print("Failed to insert feature vectors")
+                conn.close()
+                return False
         
         # Commit changes
         conn.commit()
         
         # Close connection
-        cursor.close()
         conn.close()
         
         return True
         
     except Exception as e:
         print(f"Error adding image to database: {e}")
+        # Attempt to close connection in case of error
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except:
+                pass
         return False
 
 def delete_image_from_database(image_path):
@@ -170,40 +277,57 @@ def delete_image_from_database(image_path):
         return False
     
     try:
-        cursor = connection.cursor()
-        
         # Tìm image_id dựa trên đường dẫn
-        find_image_query = "SELECT id FROM images WHERE image_path = %s"
-        cursor.execute(find_image_query, (image_path,))
-        result = cursor.fetchone()
+        find_image_query = f"SELECT id FROM images WHERE image_path = '{image_path}'"
         
-        if result is None:
+        result = execute_query(connection, find_image_query)
+        
+        if not result or len(result) == 0:
             print(f"Image {image_path} not found in database")
+            connection.close()
             return False
         
-        image_id = result[0]
+        image_id = result[0][0]
         
         # Xóa các record liên quan từ các bảng con
         tables = ["feature_vectors", "face_encodings", "genders", "skin_colors", "emotions"]
         for table in tables:
-            delete_query = f"DELETE FROM {table} WHERE image_id = %s"
-            cursor.execute(delete_query, (image_id,))
+            delete_query = f"DELETE FROM {table} WHERE image_id = {image_id}"
+            delete_result = execute_query(connection, delete_query)
+            if delete_result is None:
+                print(f"Failed to delete from {table}")
+                connection.rollback()
+                connection.close()
+                return False
         
         # Xóa record từ bảng images
-        delete_image_query = "DELETE FROM images WHERE id = %s"
-        cursor.execute(delete_image_query, (image_id,))
+        delete_image_query = f"DELETE FROM images WHERE id = {image_id}"
+        delete_result = execute_query(connection, delete_image_query)
+        if delete_result is None:
+            print("Failed to delete from images table")
+            connection.rollback()
+            connection.close()
+            return False
         
         connection.commit()
+        connection.close()
         return True
         
     except Error as e:
         print(f"Error deleting image from database: {e}")
-        connection.rollback()
+        try:
+            connection.rollback()
+        except:
+            pass
         return False
     finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
+        # Đảm bảo đóng kết nối
+        if connection:
+            try:
+                if connection.is_connected():
+                    connection.close()
+            except:
+                pass
 
 def clear_database():
     """
@@ -218,8 +342,6 @@ def clear_database():
         if conn is None:
             return False
         
-        cursor = conn.cursor()
-        
         # Delete all data from tables
         tables = [
             'feature_vectors',
@@ -232,24 +354,40 @@ def clear_database():
         
         for table in tables:
             query = f"DELETE FROM {table}"
-            cursor.execute(query)
+            result = execute_query(conn, query)
+            if result is None:
+                print(f"Failed to delete data from {table}")
+                conn.rollback()
+                conn.close()
+                return False
         
         # Reset auto-increment values
         for table in tables:
             query = f"ALTER TABLE {table} AUTO_INCREMENT = 1"
-            cursor.execute(query)
+            result = execute_query(conn, query)
+            if result is None:
+                print(f"Failed to reset auto-increment for {table}")
+                conn.rollback()
+                conn.close()
+                return False
         
         # Commit changes
         conn.commit()
         
         # Close connection
-        cursor.close()
         conn.close()
         
         return True
         
     except Exception as e:
         print(f"Error clearing database: {e}")
+        # Attempt to close connection in case of error
+        if 'conn' in locals() and conn:
+            try:
+                conn.rollback()
+                conn.close()
+            except:
+                pass
         return False
 
 def build_database(folder_path):
@@ -286,6 +424,7 @@ def build_database(folder_path):
         
         if len(image_files) == 0:
             print("Không tìm thấy tệp ảnh trong thư mục")
+            conn.close()
             return True, 0
         
         # Process each image
@@ -297,7 +436,7 @@ def build_database(folder_path):
             features = extract_features(image_path=image_path)
             
             # Skip if no face found
-            if not features['face_found']:
+            if not features or not features.get('face_found', False):
                 print(f"Không tìm thấy khuôn mặt trong {image_path}")
                 continue
             
@@ -318,120 +457,14 @@ def build_database(folder_path):
         
     except Exception as e:
         print(f"Lỗi khi xây dựng cơ sở dữ liệu: {e}")
+        # Đảm bảo đóng kết nối
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except:
+                pass
         return False, 0
 
-def compute_vector_distance(query_vector, db_vector, distance_type='euclidean'):
-    """
-    Compute distance between two vectors
-    
-    Args:
-        query_vector: Query vector
-        db_vector: Database vector
-        distance_type: Type of distance to compute ('euclidean' or 'cosine')
-        
-    Returns:
-        float: Distance between vectors
-    """
-    try:
-        # Convert to numpy arrays if needed
-        if not isinstance(query_vector, np.ndarray):
-            query_vector = np.array(query_vector)
-        if not isinstance(db_vector, np.ndarray):
-            db_vector = np.array(db_vector)
-        
-        # Make sure vectors have the same shape
-        if query_vector.shape != db_vector.shape:
-            print(f"Vector shapes do not match: {query_vector.shape} vs {db_vector.shape}")
-            
-            # Try to make them match
-            min_length = min(query_vector.shape[0], db_vector.shape[0])
-            query_vector = query_vector[:min_length]
-            db_vector = db_vector[:min_length]
-        
-        # Check for NaN values
-        if np.isnan(query_vector).any() or np.isnan(db_vector).any():
-            print("Warning: NaN values detected in vectors, replacing with zeros")
-            query_vector = np.nan_to_num(query_vector)
-            db_vector = np.nan_to_num(db_vector)
-        
-        if distance_type == 'cosine':
-            # Cosine similarity
-            dot = np.dot(query_vector, db_vector)
-            norm_query = np.linalg.norm(query_vector)
-            norm_db = np.linalg.norm(db_vector)
-            
-            # Avoid division by zero
-            if norm_query == 0 or norm_db == 0:
-                return 1.0
-            
-            similarity = dot / (norm_query * norm_db)
-            # Convert from similarity to distance (1 - similarity)
-            return 1.0 - similarity
-        else:
-            # Euclidean distance
-            return np.linalg.norm(query_vector - db_vector)
-            
-    except Exception as e:
-        print(f"Error computing vector distance: {e}")
-        return float('inf')  # Return infinite distance on error
-
-def compute_vector_similarity(distance, max_distance=2.0, vector_type=None):
-    """
-    Convert distance to similarity score (0-1)
-    
-    Args:
-        distance: Distance value
-        max_distance: Maximum distance value for normalization
-        vector_type: Type of vector ('combined', 'gender', 'skin', 'emotion')
-        
-    Returns:
-        float: Similarity score (0-1)
-    """
-    try:
-        # Check if distance is valid
-        if distance != distance or distance > 1e9:  # Check for NaN or very large values
-            print(f"WARNING: Invalid distance detected: {distance}")
-            # Set a default value if distance is invalid
-            distance = max_distance
-        
-        # Adjust max_distance based on vector type
-        if vector_type == 'combined':
-            # 176-dimensional vector can have a much larger distance
-            adjusted_max_distance = 1000.0
-        elif vector_type in ['gender', 'skin', 'emotion']:
-            # 16-dimensional vectors
-            adjusted_max_distance = 100.0
-        else:
-            # If not specified, use a middle ground
-            adjusted_max_distance = 500.0
-        
-        # Compute similarity
-        similarity = max(0, 1 - (distance / adjusted_max_distance))
-        
-        # Ensure similarity is not 0 even for large distances
-        if similarity < 0.01:
-            similarity = 0.01  # Set minimum to 1%
-        
-        return similarity
-        
-    except Exception as e:
-        print(f"Error computing vector similarity: {e}")
-        return 0.01  # Return minimum similarity on error
-
-def compute_vector_distance_full(query_vector, db_vector, distance_type='euclidean'):
-    """
-    Compute distance between two 176-dimensional vectors
-    
-    Args:
-        query_vector: Query vector (176-dimensional)
-        db_vector: Database vector (176-dimensional)
-        distance_type: Type of distance to compute ('euclidean' or 'cosine')
-        
-    Returns:
-        float: Distance between vectors
-    """
-    # This function is the same as compute_vector_distance, but specifically for 176-dimensional vectors
-    return compute_vector_distance(query_vector, db_vector, distance_type)
 
 def find_similar_faces(query_features, top_n=3, filters=None):
     """
@@ -459,7 +492,6 @@ def find_similar_faces(query_features, top_n=3, filters=None):
             return []
         
         print("Database connection established")
-        cursor = conn.cursor(dictionary=True)
         
         # Build the SQL query based on filters
         base_query = """
@@ -473,41 +505,52 @@ def find_similar_faces(query_features, top_n=3, filters=None):
         """
         
         where_clauses = []
-        params = []
         
         # Add filter conditions if provided
         if filters:
             if 'gender' in filters and filters['gender']:
-                where_clauses.append("g.gender_type = %s")
-                params.append(filters['gender'])
+                where_clauses.append(f"g.gender_type = '{filters['gender']}'")
             
             if 'skin_color' in filters and filters['skin_color']:
-                where_clauses.append("s.skin_color_type = %s")
-                params.append(filters['skin_color'])
+                where_clauses.append(f"s.skin_color_type = '{filters['skin_color']}'")
             
             if 'emotion' in filters and filters['emotion']:
-                where_clauses.append("e.emotion_type = %s")
-                params.append(filters['emotion'])
+                where_clauses.append(f"e.emotion_type = '{filters['emotion']}'")
         
         # Add WHERE clause if there are filters
         if where_clauses:
             base_query += " WHERE " + " AND ".join(where_clauses)
         
         # Execute query
-        print(f"Executing query: {base_query} with params: {params}")
-        try:
-            cursor.execute(base_query, params)
-            results = cursor.fetchall()
-            print(f"Query executed. Found {len(results)} records.")
-        except Exception as e:
-            print(f"Database query error: {e}")
+        print(f"Executing query: {base_query}")
+        
+        rows = execute_query(conn, base_query)
+        
+        # Nếu rows là None hoặc là danh sách trống, trả về danh sách trống
+        if rows is None:
+            print("Error executing query.")
             conn.close()
             return []
         
-        if len(results) == 0:
-            print("No faces found in database.")
+        if len(rows) == 0:
+            print("Query returned no results.")
             conn.close()
             return []
+        
+        # Tạo danh sách các kết quả dưới dạng dictionary
+        results = []
+        for row in rows:
+            result = {
+                'id': row[0],
+                'image_path': row[1],
+                'gender_type': row[2],
+                'skin_color_type': row[3],
+                'emotion_type': row[4],
+                'combined_vector': row[5]
+            }
+            results.append(result)
+        
+        print(f"Query executed. Found {len(results)} records.")
         
         # Convert combined_vector from JSON to numpy array
         print("Processing database vectors...")
@@ -585,7 +628,6 @@ def find_similar_faces(query_features, top_n=3, filters=None):
             print(f"Top {i+1}: {face['image_path']} (distance: {face['distance']})")
         
         # Close database connection
-        cursor.close()
         conn.close()
         
         return similar_faces
@@ -594,6 +636,12 @@ def find_similar_faces(query_features, top_n=3, filters=None):
         print(f"Error finding similar faces: {e}")
         import traceback
         traceback.print_exc()
+        # Attempt to close connection in case of error
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except:
+                pass
         return []
 
 def get_all_features():
@@ -613,22 +661,19 @@ def get_all_features():
                 'emotions': []
             }
         
-        cursor = conn.cursor()
-        
         # Get unique genders
-        cursor.execute("SELECT DISTINCT gender_type FROM genders")
-        genders = [row[0] for row in cursor.fetchall()]
+        gender_rows = execute_query(conn, "SELECT DISTINCT gender_type FROM genders")
+        genders = [row[0] for row in gender_rows] if gender_rows and gender_rows is not None and len(gender_rows) > 0 else []
         
         # Get unique skin colors
-        cursor.execute("SELECT DISTINCT skin_color_type FROM skin_colors")
-        skin_colors = [row[0] for row in cursor.fetchall()]
+        skin_rows = execute_query(conn, "SELECT DISTINCT skin_color_type FROM skin_colors")
+        skin_colors = [row[0] for row in skin_rows] if skin_rows and skin_rows is not None and len(skin_rows) > 0 else []
         
         # Get unique emotions
-        cursor.execute("SELECT DISTINCT emotion_type FROM emotions")
-        emotions = [row[0] for row in cursor.fetchall()]
+        emotion_rows = execute_query(conn, "SELECT DISTINCT emotion_type FROM emotions")
+        emotions = [row[0] for row in emotion_rows] if emotion_rows and emotion_rows is not None and len(emotion_rows) > 0 else []
         
         # Close connection
-        cursor.close()
         conn.close()
         
         return {
@@ -639,6 +684,12 @@ def get_all_features():
         
     except Exception as e:
         print(f"Error getting all features: {e}")
+        # Attempt to close connection in case of error
+        if 'conn' in locals() and conn:
+            try:
+                conn.close()
+            except:
+                pass
         return {
             'genders': [],
             'skin_colors': [],
