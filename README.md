@@ -1,229 +1,263 @@
-# Hệ Thống Nhận Diện Khuôn Mặt
+# Hệ Thống Nhận Dạng Khuôn Mặt Tiên Tiến
 
-Hệ thống nhận diện khuôn mặt trích xuất các đặc trưng từ khuôn mặt (giới tính, màu da, cảm xúc) và tìm kiếm những khuôn mặt tương tự dựa trên khoảng cách Euclidean.
+## Giới Thiệu
 
-## Tính Năng
+Dự án này là một hệ thống nhận dạng khuôn mặt tiên tiến sử dụng trí tuệ nhân tạo để phân tích và trích xuất các đặc trưng chi tiết từ hình ảnh khuôn mặt. Hệ thống cung cấp khả năng phân tích đa chiều bao gồm giới tính, màu da, cảm xúc và mã hóa khuôn mặt.
 
-- Trích xuất giới tính, màu da và cảm xúc từ hình ảnh khuôn mặt
-- Tìm top 3 khuôn mặt tương tự nhất dựa trên khoảng cách Euclidean
-- Lọc kết quả tìm kiếm theo giới tính, màu da và cảm xúc
-- Xây dựng và quản lý cơ sở dữ liệu thông qua giao diện web
-- Hỗ trợ song ngữ Anh-Việt cho mô tả đặc trưng
+## Tính Năng Chính
 
-## Kiến Trúc Hệ Thống
+- **Trích Xuất Đặc Trưng Khuôn Mặt**: 
+  - Vector đặc trưng 173 chiều
+  - Bao gồm mã hóa khuôn mặt 128 chiều
+  - Vector giới tính 15 chiều
+  - Vector màu da 15 chiều
+  - Vector cảm xúc 15 chiều
 
-Hệ thống bao gồm các thành phần sau:
+- **Phân Tích Chi Tiết**:
+  - Nhận dạng giới tính (Nam/Nữ)
+  - Phân loại màu da (Trắng/Đen/Vàng)
+  - Nhận dạng cảm xúc (Vui/Buồn/Giận/Ngạc Nhiên/Sợ Hãi/Ghê Tởm/Trung Tính)
 
-- **Trích xuất đặc trưng**: Trích xuất đặc trưng giới tính, màu da và cảm xúc từ hình ảnh khuôn mặt
-- **Quản lý cơ sở dữ liệu**: Lưu trữ và truy xuất đặc trưng khuôn mặt và hình ảnh
-- **Giao diện Web**: Cung cấp giao diện thân thiện với người dùng để tìm kiếm và quản lý cơ sở dữ liệu
+- **Tìm Kiếm Khuôn Mặt Tương Tự**:
+  - Sử dụng độ tương đồng cosine
+  - Hỗ trợ lọc theo nhiều tiêu chí
 
-## Cài Đặt
+## Yêu Cầu Hệ Thống
 
-### Yêu Cầu Hệ Thống
+### Phần Mềm
+- Python 3.8+
+- OpenCV
+- NumPy
+- MySQL Connector
+- Flask
+- SciPy
 
-- Python 3.7 trở lên
-- MySQL 5.7 trở lên
-- Thư viện OpenCV và NumPy
+### Cấu Hình Phần Cứng
+- RAM: 8GB trở lên
+- CPU: Hỗ trợ OpenCV và xử lý song song
+- Không yêu cầu GPU (nhưng khuyến nghị có GPU để tăng tốc độ)
 
-### Thiết Lập
-
-1. Sao chép kho lưu trữ:
-   ```
-   git clone https://github.com/username/facial-recognition.git
-   cd facial-recognition
-   ```
-
-2. Cài đặt các gói phụ thuộc:
-   ```
-   pip install -r requirements.txt
-   ```
-
-3. Cấu hình kết nối cơ sở dữ liệu trong `db_config.py`:
-   ```python
-   DB_HOST = 'localhost'
-   DB_USER = 'your_username'
-   DB_PASSWORD = 'your_password'
-   DB_NAME = 'face_recognition_db'
-   DB_PORT = 3306
-   ```
-
-4. Thiết lập cơ sở dữ liệu:
-   ```
-   python mysql_setup.py
-   ```
-
-## Sử Dụng
-
-1. Khởi động ứng dụng:
-   ```
-   python app.py
-   ```
-
-2. Mở trình duyệt web và truy cập:
-   ```
-   http://localhost:8080
-   ```
-
-3. Sử dụng tab "Quản lý cơ sở dữ liệu" để thêm hình ảnh vào cơ sở dữ liệu bằng cách cung cấp đường dẫn đến thư mục chứa hình ảnh khuôn mặt.
-
-4. Sử dụng tab "Tìm kiếm" để tải lên hình ảnh khuôn mặt và tìm kiếm các khuôn mặt tương tự trong cơ sở dữ liệu.
-
-5. Áp dụng các bộ lọc (giới tính, màu da, cảm xúc) để tinh chỉnh kết quả tìm kiếm.
-
-## Kiểm Tra Các Module
-
-Bạn có thể kiểm tra các module trích xuất đặc trưng riêng lẻ bằng cách sử dụng script kiểm tra được cung cấp:
-
+## Cấu Trúc Dự Án
 ```
-python test_features.py đường/dẫn/đến/ảnh.jpg
+project/
+│
+├── feature_extraction.py     # Trích xuất đặc trưng khuôn mặt
+├── emotion_detection.py      # Nhận dạng cảm xúc
+├── gender_detection.py       # Nhận dạng giới tính
+├── skin_classification.py    # Phân loại màu da
+├── database.py               # Quản lý cơ sở dữ liệu
+├── app.py                    # Ứng dụng web Flask
+└── utils.py                  # Các hàm tiện ích
 ```
 
-Để so sánh đặc trưng giữa hai hình ảnh:
+## Chi Tiết Kỹ Thuật
 
-```
-python test_features.py đường/dẫn/đến/ảnh1.jpg đường/dẫn/đến/ảnh2.jpg
-```
+### Vector Đặc Trưng Chi Tiết
 
-## Mô Tả Module
+#### 1. Vector Mã Hóa Khuôn Mặt (128 chiều)
+- **Mục Đích**: Tạo biểu diễn số duy nhất và ổn định của khuôn mặt
+- **Chi Tiết Kỹ Thuật**:
+  - Trích xuất từ 16 vùng khác nhau (4x4 grid)
+  - Sử dụng gradient và histogram hướng
+  - Mỗi chiều biểu thị một đặc trưng cụ thể của khuôn mặt
+- **Các Giá Trị**:
+  - Chiều 0-31: Đặc trưng vùng mắt trái
+  - Chiều 32-63: Đặc trưng vùng mắt phải
+  - Chiều 64-95: Đặc trưng vùng mũi và má
+  - Chiều 96-127: Đặc trưng vùng miệng và cằm
+- **Ứng Dụng**:
+  - So sánh độ tương đồng khuôn mặt
+  - Nhận dạng cá nhân
+  - Tìm kiếm khuôn mặt trong cơ sở dữ liệu
 
-- `app.py`: Ứng dụng Flask chính xử lý các route và yêu cầu
-- `database.py`: Xử lý các thao tác cơ sở dữ liệu để lưu trữ và truy xuất dữ liệu khuôn mặt
-- `feature_extraction.py`: Kết hợp tất cả các đặc trưng (giới tính, màu da, cảm xúc) thành một vector duy nhất
-- `gender_detection.py`: Phát hiện giới tính và trích xuất đặc trưng liên quan đến giới tính
-- `skin_classification.py`: Phân loại màu da và trích xuất đặc trưng màu da
-- `emotion_detection.py`: Phát hiện cảm xúc và trích xuất đặc trưng liên quan đến cảm xúc
-- `utils.py`: Chứa các hàm tiện ích cho dịch thuật và xác thực
-- `db_config.py`: Chứa cài đặt cấu hình cơ sở dữ liệu
-- `mysql_setup.py`: Thiết lập cơ sở dữ liệu MySQL với các bảng cần thiết
-- `test_features.py`: Script kiểm tra để xác minh chức năng trích xuất đặc trưng
+#### 2. Vector Giới Tính (15 chiều)
+- **Mục Đích**: Đặc trưng và phân loại giới tính của khuôn mặt
+- **Chi Tiết Từng Chiều**:
+  - **Chiều 0**: Giới tính dự đoán - Giá trị số hóa (0=Nam, 1=Nữ, 2=Không xác định)
+  - **Chiều 1**: Độ tin cậy - Mức độ chắc chắn của dự đoán giới tính (0-1)
+  - **Chiều 2**: One-hot cho Nữ - Giá trị 1 nếu là Nữ, 0 nếu không
+  - **Chiều 3**: One-hot cho Nam - Giá trị 1 nếu là Nam, 0 nếu không
+  - **Chiều 4**: Tỷ lệ khuôn mặt - Tỷ lệ chiều cao/chiều rộng (chuẩn hóa 0-1)
+  - **Chiều 5**: Độ mịn da - Đo lường texture của da (chuẩn hóa 0-1)
+  - **Chiều 6**: Đặc trưng hàm - Mức độ nổi bật của đường hàm (chuẩn hóa 0-1)
+  - **Chiều 7**: Đặc trưng mắt - Đặc điểm vùng mắt (chuẩn hóa 0-1)
+  - **Chiều 8**: One-hot encoding phân loại Nam (0-2)
+  - **Chiều 9**: One-hot encoding phân loại Nữ (0-2)
+  - **Chiều 10**: One-hot encoding phân loại Không xác định (0-2)
+  - **Chiều 11**: Giới tính dự đoán (normalized) - Giá trị 0-1 biểu thị giới tính
+  - **Chiều 12**: Độ tin cậy - Lặp lại độ tin cậy của dự đoán
+  - **Chiều 13**: One-hot cho Nữ - Lặp lại giá trị cho Nữ
+  - **Chiều 14**: One-hot cho Nam - Lặp lại giá trị cho Nam
+- **Ứng Dụng**:
+  - Phân loại giới tính tự động
+  - Tìm kiếm theo giới tính
+  - Phân tích nhân khẩu học
 
-## Tìm Kiếm Top 3 Khuôn Mặt Tương Tự Nhất
+#### 3. Vector Cảm Xúc (15 chiều)
+- **Mục Đích**: Đặc trưng và phân loại cảm xúc thể hiện trên khuôn mặt
+- **Chi Tiết Từng Chiều**:
+  - **Chiều 0**: Trung bình vùng mắt - Độ sáng trung bình vùng mắt (0-1)
+  - **Chiều 1**: Độ lệch chuẩn vùng mắt - Texture và chi tiết vùng mắt (0-1)
+  - **Chiều 2**: Trung bình vùng miệng - Độ sáng trung bình vùng miệng (0-1)
+  - **Chiều 3**: Độ lệch chuẩn vùng miệng - Texture và chi tiết vùng miệng (0-1)
+  - **Chiều 4**: Độ cong môi trên - Độ cong của môi trên (chuẩn hóa, giá trị âm=cong xuống)
+  - **Chiều 5**: Độ cong môi dưới - Độ cong của môi dưới (chuẩn hóa, giá trị âm=cong lên)
+  - **Chiều 6**: Gradient toàn cục - Mức độ thay đổi độ sáng toàn bộ khuôn mặt (0-1)
+  - **Chiều 7**: Độ lệch chuẩn gradient - Đo lường sự phức tạp của khuôn mặt (0-1)
+  - **Chiều 8**: Cường độ lông mày - Đo lường gradient và đặc điểm lông mày (0-1)
+  - **Chiều 9**: One-hot encoding cho cảm xúc Vui vẻ (0-7)
+  - **Chiều 10**: One-hot encoding cho cảm xúc Buồn (0-7)
+  - **Chiều 11**: One-hot encoding cho cảm xúc Giận dữ (0-7)
+  - **Chiều 12**: One-hot encoding cho cảm xúc Ngạc nhiên (0-7)
+  - **Chiều 13**: One-hot encoding cho cảm xúc Sợ hãi (0-7)
+  - **Chiều 14**: One-hot encoding cho cảm xúc Ghê tởm hoặc Trung tính (0-7)
+- **Ứng Dụng**:
+  - Nhận dạng biểu cảm khuôn mặt
+  - Phân tích tâm lý từ hình ảnh
+  - Tương tác người-máy thông minh
 
-### Phương Pháp Khoảng Cách Euclidean
+#### 4. Vector Màu Da (15 chiều)
+- **Mục Đích**: Đặc trưng và phân loại màu da trên khuôn mặt
+- **Chi Tiết Từng Chiều**:
+  - **Chiều 0**: Trung bình kênh đỏ (R) - Giá trị trung bình kênh đỏ trên vùng da (0-1)
+  - **Chiều 1**: Trung bình kênh xanh lá (G) - Giá trị trung bình kênh xanh lá trên vùng da (0-1)
+  - **Chiều 2**: Trung bình kênh xanh dương (B) - Giá trị trung bình kênh xanh dương trên vùng da (0-1)
+  - **Chiều 3**: Trung bình kênh màu (H) - Trung bình tông màu trong không gian HSV (0-1)
+  - **Chiều 4**: Trung bình độ bão hòa (S) - Trung bình độ bão hòa màu trong không gian HSV (0-1)
+  - **Chiều 5**: Trung bình độ sáng (V) - Trung bình độ sáng trong không gian HSV (0-1)
+  - **Chiều 6**: Độ tin cậy - Mức độ tin cậy của phân loại màu da (0-1)
+  - **Chiều 7**: Độ sáng tổng thể - Tính theo công thức từ RGB (0-1)
+  - **Chiều 8**: Tỷ lệ R/B - Tỷ lệ giữa kênh đỏ và kênh xanh dương (>1 cho da ấm)
+  - **Chiều 9**: Tỷ lệ R/G - Tỷ lệ giữa kênh đỏ và kênh xanh lá (biểu thị đặc điểm da)
+  - **Chiều 10**: Độ sáng (L) - Giá trị độ sáng trong không gian LAB (0-1)
+  - **Chiều 11**: Giá trị (b) - Trục vàng-xanh trong không gian LAB (cao=vàng, thấp=xanh)
+  - **Chiều 12**: One-hot encoding cho da Trắng (1=Trắng, 0=Khác)
+  - **Chiều 13**: One-hot encoding cho da Đen (1=Đen, 0=Khác)
+  - **Chiều 14**: One-hot encoding cho da Vàng (1=Vàng, 0=Khác)
+- **Ứng Dụng**:
+  - Phân loại màu da
+  - Điều chỉnh tông màu tự động
+  - Nghiên cứu nhân chủng học
 
-Hệ thống sử dụng khoảng cách Euclidean để đo lường độ tương tự giữa các vector đặc trưng khuôn mặt. Công thức tính khoảng cách Euclidean giữa hai vector đặc trưng A và B được định nghĩa như sau:
+#### 5. Vector Tổng Hợp (173 chiều)
+- **Mục Đích**: Tạo biểu diễn toàn diện về khuôn mặt bao gồm tất cả các đặc trưng
+- **Chi Tiết Kỹ Thuật**:
+  - Kết hợp 4 vector thành 1 vector duy nhất
+  - Bao gồm: Vector Mã hóa (128) + Vector Giới tính (15) + Vector Cảm xúc (15) + Vector Màu da (15)
+- **Ứng Dụng**:
+  - Tìm kiếm khuôn mặt tương tự toàn diện
+  - Phân tích đa chiều
+  - Nghiên cứu về biểu hiện khuôn mặt
 
-```
-d(A, B) = √[(a₁ - b₁)² + (a₂ - b₂)² + ... + (aₙ - bₙ)²]
-```
+## Chi Tiết Hàm Chức Năng
 
-Trong đó:
-- A = (a₁, a₂, ..., aₙ) là vector đặc trưng của khuôn mặt truy vấn
-- B = (b₁, b₂, ..., bₙ) là vector đặc trưng của khuôn mặt trong cơ sở dữ liệu
-- n là số chiều của vector đặc trưng (trong trường hợp của chúng ta, n = 48, bao gồm 16 chiều cho giới tính + 16 chiều cho màu da + 16 chiều cho cảm xúc)
+### Trích Xuất Đặc Trưng (`feature_extraction.py`)
 
-Các bước thực hiện:
-1. Trích xuất vector đặc trưng 48 chiều từ hình ảnh khuôn mặt đầu vào
-2. Tính toán khoảng cách Euclidean giữa vector này và tất cả các vector trong cơ sở dữ liệu
-3. Sắp xếp các kết quả theo khoảng cách Euclidean tăng dần (khoảng cách càng nhỏ, độ tương tự càng cao)
-4. Chọn 3 khuôn mặt có khoảng cách nhỏ nhất (top 3 tương tự nhất)
+#### `extract_face(image)`
+- **Mục Đích**: Trích xuất vùng khuôn mặt từ ảnh đầu vào
+- **Kỹ Thuật**:
+  - Sử dụng Haar Cascade Classifier để phát hiện khuôn mặt
+  - Hỗ trợ nhiều tỷ lệ và kích thước khuôn mặt
+  - Thêm margin để bao quanh toàn bộ khuôn mặt
+- **Đầu Ra**: Ảnh khuôn mặt được cắt và điều chỉnh kích thước
 
-### Trọng Số Đặc Trưng
+#### `create_face_encoding(face_image)`
+- **Mục Đích**: Tạo vector mã hóa 128 chiều cho khuôn mặt
+- **Kỹ Thuật**:
+  - Chia khuôn mặt thành 16 vùng (4x4 grid)
+  - Tính toán gradient và histogram hướng cho mỗi vùng
+  - Chuẩn hóa vector để đảm bảo tính ổn định
+- **Đầu Ra**: Vector 128 chiều biểu diễn đặc trưng khuôn mặt
 
-Mỗi loại đặc trưng (giới tính, màu da, cảm xúc) có thể được gán các trọng số khác nhau để điều chỉnh ảnh hưởng của chúng trong quá trình tính toán khoảng cách:
+#### `extract_features(image_path/image_array)`
+- **Mục Đích**: Trích xuất toàn bộ đặc trưng từ ảnh khuôn mặt
+- **Các Bước**:
+  1. Trích xuất khuôn mặt
+  2. Tạo mã hóa khuôn mặt
+  3. Nhận dạng giới tính
+  4. Phân loại màu da
+  5. Nhận dạng cảm xúc
+- **Đầu Ra**: Từ điển chứa các vector và nhãn chi tiết
 
-```
-d(A, B) = √[w₁·∑(a₁ᵢ - b₁ᵢ)² + w₂·∑(a₂ᵢ - b₂ᵢ)² + w₃·∑(a₃ᵢ - b₃ᵢ)²]
-```
+### Nhận Dạng Cảm Xúc (`emotion_detection.py`)
 
-Trong đó:
-- w₁, w₂, w₃ là các trọng số cho đặc trưng giới tính, màu da và cảm xúc
-- a₁ᵢ, a₂ᵢ, a₃ᵢ là các thành phần của vector đặc trưng A tương ứng với giới tính, màu da và cảm xúc
-- b₁ᵢ, b₂ᵢ, b₃ᵢ là các thành phần của vector đặc trưng B tương ứng với giới tính, màu da và cảm xúc
+#### `detect_emotion(face_image)`
+- **Mục Đích**: Nhận dạng cảm xúc từ ảnh khuôn mặt
+- **Kỹ Thuật Phân Tích**:
+  - Phân tích vùng miệng, mắt, lông mày
+  - Sử dụng gradient, độ lệch chuẩn, và ngưỡng
+  - Tính điểm cho 7 loại cảm xúc
+- **Đầu Ra**: Loại cảm xúc và độ tin cậy
 
-## Vector Đặc Trưng 16 Chiều
+#### `get_emotion_vector(face_image)`
+- **Mục Đích**: Tạo vector đặc trưng cảm xúc 15 chiều
+- **Các Đặc Trưng**:
+  - Gradient toàn cục
+  - Đặc điểm vùng miệng và mắt
+  - Mã hóa one-hot cho loại cảm xúc
+  - Độ tin cậy và cường độ cảm xúc
+- **Đầu Ra**: Vector 15 chiều mô tả cảm xúc
 
-Mỗi loại đặc trưng (giới tính, màu da, cảm xúc) được biểu diễn bởi một vector 16 chiều. Dưới đây là ý nghĩa chi tiết của từng chiều trong mỗi vector.
+### Nhận Dạng Giới Tính (`gender_detection.py`)
 
-### Vector Đặc Trưng Giới Tính (16 chiều)
+#### `detect_gender(face_image)`
+- **Mục Đích**: Nhận dạng giới tính từ ảnh khuôn mặt
+- **Kỹ Thuật Phân Tích**:
+  - Phân tích texture da
+  - Đánh giá vùng má, mắt, hàm
+  - Sử dụng face encoding để tăng độ chính xác
+- **Đầu Ra**: Giới tính (Nam/Nữ) và độ tin cậy
 
-1. **Tỷ lệ chiều rộng/chiều cao của khuôn mặt**: Đàn ông thường có tỷ lệ này lớn hơn
-2. **Mức độ cường điệu xương hàm**: Đo đặc trưng về độ góc cạnh của xương hàm
-3. **Chiều dài của trán**: Đo từ đỉnh lông mày đến đường chân tóc
-4. **Khoảng cách giữa hai mắt**: Đo khoảng cách tương đối giữa hai mắt
-5. **Độ dày của lông mày**: Đo độ dày trung bình của lông mày
-6. **Góc lông mày**: Đo góc của lông mày so với mặt phẳng ngang
-7. **Tỷ lệ chiều cao/chiều rộng của mũi**: Đặc trưng về hình dạng mũi
-8. **Độ rộng của cằm**: Đo độ rộng tương đối của cằm
-9. **Độ nhọn của cằm**: Đo mức độ nhọn ở phần cuối cằm
-10. **Tỷ lệ môi trên/môi dưới**: Tỷ lệ độ dày giữa môi trên và môi dưới
-11. **Độ nổi của xương gò má**: Đo độ nổi của xương gò má
-12. **Độ mịn da**: Đánh giá độ mịn của da mặt
-13. **Chiều dài tương đối của cổ**: Đo độ dài tương đối của cổ
-14. **Độ vòng của gò má**: Đo độ tròn của gò má
-15. **Kích thước của tai**: Đo kích thước tương đối của tai
-16. **Hệ số tin cậy**: Mức độ tin cậy của dự đoán giới tính
+#### `get_gender_vector(face_image)`
+- **Mục Đích**: Tạo vector đặc trưng giới tính 15 chiều
+- **Các Đặc Trưng**:
+  - Gradient toàn cục
+  - Đặc điểm vùng hàm và mắt
+  - Mã hóa one-hot cho giới tính
+  - Độ tin cậy và cường độ giới tính
+- **Đầu Ra**: Vector 15 chiều mô tả giới tính
 
-### Vector Đặc Trưng Màu Da (16 chiều)
+### Phân Loại Màu Da (`skin_classification.py`)
 
-1. **Giá trị trung bình kênh H (Hue)**: Giá trị trung bình của thông số màu sắc trong không gian màu HSV
-2. **Giá trị trung bình kênh S (Saturation)**: Giá trị trung bình của độ bão hòa màu trong không gian màu HSV
-3. **Giá trị trung bình kênh V (Value)**: Giá trị trung bình của độ sáng trong không gian màu HSV
-4. **Độ lệch chuẩn kênh H**: Độ biến thiên của thông số màu sắc
-5. **Độ lệch chuẩn kênh S**: Độ biến thiên của độ bão hòa màu
-6. **Độ lệch chuẩn kênh V**: Độ biến thiên của độ sáng
-7. **Tỷ lệ sắc tố melanin**: Thước đo lượng melanin trong da
-8. **Chỉ số ITA (Individual Typology Angle)**: Góc typology cá nhân, dùng để phân loại màu da
-9. **Giá trị trung bình kênh L (Lightness)**: Độ sáng trung bình trong không gian màu L*a*b*
-10. **Giá trị trung bình kênh a**: Thành phần màu đỏ-xanh lá trong không gian màu L*a*b*
-11. **Giá trị trung bình kênh b**: Thành phần màu vàng-xanh dương trong không gian màu L*a*b*
-12. **Độ đồng nhất màu da**: Đo lường mức độ đồng đều của màu da
-13. **Độ phản quang của da**: Đo lường khả năng phản chiếu ánh sáng của da
-14. **Chỉ số đỏ của má**: Đo màu đỏ ở vùng má
-15. **Chênh lệch màu giữa trán và cằm**: Chênh lệch màu sắc giữa vùng trán và cằm
-16. **Hệ số tin cậy của phân loại màu da**: Mức độ tin cậy của phân loại màu da
+#### `classify_skin_color(face_image)`
+- **Mục Đích**: Phân loại màu da từ ảnh khuôn mặt
+- **Kỹ Thuật Phân Tích**:
+  - Sử dụng nhiều không gian màu (HSV, YCrCb, LAB)
+  - Phân tích độ sáng, tỷ lệ màu
+  - Tính điểm cho 3 loại màu da (Trắng/Đen/Vàng)
+- **Đầu Ra**: Loại màu da và độ tin cậy
 
-### Vector Đặc Trưng Cảm Xúc (16 chiều)
+#### `get_skin_vector(face_image)`
+- **Mục Đích**: Tạo vector đặc trưng màu da 15 chiều
+- **Các Đặc Trưng**:
+  - Gradient toàn cục
+  - Đặc điểm vùng da và má
+  - Mã hóa one-hot cho màu da
+  - Độ tin cậy và cường độ màu da
+- **Đầu Ra**: Vector 15 chiều mô tả màu da
 
-1. **Khoảng cách giữa hai đuôi mắt và khóe miệng**: Đo sự căng/thả lỏng của cơ mặt
-2. **Độ cong của miệng**: Đặc trưng cho nụ cười hoặc nét mặt buồn
-3. **Độ mở của miệng**: Đo độ mở giữa môi trên và môi dưới
-4. **Độ nhướng của lông mày**: Đo độ nâng lên của lông mày (biểu hiện ngạc nhiên/sợ hãi)
-5. **Độ nhíu của lông mày**: Đo độ cau mày (biểu hiện tức giận)
-6. **Độ mở của mắt**: Đo độ mở của mí mắt
-7. **Chỉ số co cơ mặt AU4**: Đo hoạt động của cơ nhíu lông mày
-8. **Chỉ số co cơ mặt AU12**: Đo hoạt động của cơ kéo khóe miệng (cười)
-9. **Chỉ số co cơ mặt AU15**: Đo hoạt động của cơ kéo khóe miệng xuống (buồn)
-10. **Chỉ số co cơ mặt AU1**: Đo hoạt động của cơ nâng phần trong lông mày
-11. **Chỉ số co cơ mặt AU2**: Đo hoạt động của cơ nâng phần ngoài lông mày
-12. **Chỉ số co cơ mặt AU6**: Đo hoạt động của cơ mắt (vui vẻ thật)
-13. **Chỉ số co cơ mặt AU7**: Đo hoạt động của cơ xung quanh mắt (nheo mắt)
-14. **Chỉ số co cơ mặt AU9**: Đo hoạt động của cơ nhăn mũi (ghê tởm)
-15. **Chỉ số đồng nhất cảm xúc**: Mức độ phát hiện cùng một cảm xúc từ các đặc trưng khác nhau
-16. **Hệ số tin cậy của cảm xúc**: Mức độ tin cậy trong dự đoán cảm xúc
+### Quản Lý Cơ Sở Dữ Liệu (`database.py`)
 
-## Chi Tiết Chức Năng Của Từng Hàm
+#### `add_image_to_database(image_path, features)`
+- **Mục Đích**: Thêm ảnh và các đặc trưng vào cơ sở dữ liệu
+- **Các Bước**:
+  1. Kết nối đến cơ sở dữ liệu
+  2. Chèn thông tin ảnh
+  3. Lưu trữ các vector đặc trưng
+- **Đầu Ra**: Trạng thái thành công/thất bại
 
-### database.py
-- `connect_to_database()`: Kết nối với cơ sở dữ liệu MySQL với cơ chế thử lại, trả về đối tượng kết nối hoặc None nếu không thành công.
-- `execute_query(connection, query, params=None)`: Thực thi câu truy vấn SQL với tham số tùy chọn, trả về kết quả truy vấn hoặc số hàng bị ảnh hưởng.
-- `add_image_to_database(image_path, features)`: Thêm hình ảnh và các đặc trưng vào cơ sở dữ liệu, bao gồm mã hóa khuôn mặt, giới tính, màu da, cảm xúc và vector đặc trưng.
-- `delete_image_from_database(image_path)`: Xóa hình ảnh và tất cả đặc trưng liên quan khỏi cơ sở dữ liệu.
-- `clear_database()`: Xóa tất cả dữ liệu từ các bảng trong cơ sở dữ liệu và đặt lại giá trị auto-increment.
-- `build_database(folder_path)`: Xây dựng cơ sở dữ liệu từ thư mục chứa hình ảnh, trích xuất đặc trưng và thêm vào cơ sở dữ liệu.
+#### `find_similar_faces(query_features)`
+- **Mục Đích**: Tìm kiếm khuôn mặt tương tự trong cơ sở dữ liệu
+- **Kỹ Thuật**:
+  - Sử dụng độ tương đồng cosine
+  - Hỗ trợ lọc theo giới tính, màu da, cảm xúc
+- **Đầu Ra**: Danh sách khuôn mặt tương tự nhất
 
-- `find_similar_faces(query_features, top_n=3, filters=None)`: Tìm top n khuôn mặt tương tự trong cơ sở dữ liệu dựa trên vector 176 chiều kết hợp, có thể áp dụng bộ lọc.
-- `get_all_features()`: Lấy tất cả các đặc trưng duy nhất từ cơ sở dữ liệu để phục vụ lọc (giới tính, màu da, cảm xúc).
-
-### emotion_detection.py
-- `get_image_hash(image)`: Tạo mã hash duy nhất cho hình ảnh để lưu vào bộ nhớ đệm.
-- `detect_emotion(face_image, force_recalculate=False)`: Phát hiện cảm xúc từ ảnh khuôn mặt, tối ưu cho ảnh đầu vào 224x224, với khả năng phát hiện khẩu hình cải tiến và giảm độ thiên vị trung tính.
-- `get_emotion_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho cảm xúc từ ảnh khuôn mặt.
-
-### feature_extraction.py
-- `extract_face(image)`: Trích xuất vùng khuôn mặt từ một ảnh bằng OpenCV, sử dụng cascade classifier.
-- `create_face_encoding(face_image)`: Tạo vector mã hóa 128 chiều cho khuôn mặt sử dụng OpenCV.
-- `extract_features(image_path=None, image_array=None)`: Trích xuất tất cả đặc trưng từ ảnh và tạo vector 176 chiều kết hợp, bao gồm mã hóa khuôn mặt (128), vector giới tính (16), vector màu da (16), và vector cảm xúc (16).
-
-### gender_detection.py
-- `get_image_hash(image)`: Tạo mã hash duy nhất cho hình ảnh để lưu vào bộ nhớ đệm.
-- `logistic_transition(value, low, high, steepness=10)`: Tính toán sự chuyển đổi mượt mà giữa 0 và 1 sử dụng hàm logistic.
-- `detect_gender(face_image, force_recalculate=False)`: Phát hiện giới tính từ ảnh khuôn mặt với phân tích đặc trưng cân bằng, tối ưu cho ảnh đầu vào 224x224, với độ nhất quán được cải thiện.
-- `get_gender_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho giới tính từ ảnh khuôn mặt.
-
-### skin_classification.py
-- `classify_skin_color(face_image)`: Phân loại màu da từ ảnh khuôn mặt, trả về loại màu da và độ tin cậy.
-- `get_skin_vector(face_image, vector_length=16)`: Tạo vector đặc trưng 16 chiều cho màu da từ ảnh khuôn mặt.
-
+#### `build_database(folder_path)`
+- **Mục Đích**: Xây dựng cơ sở dữ liệu từ thư mục ảnh
+- **Các Bước**:
+  1. Quét tìm các tệp ảnh
+  2. Trích xuất đặc trưng từng ảnh
+  3. Lưu trữ vào cơ sở dữ liệu
+- **Đầu Ra**: Số lượng ảnh được xử lý thành công
 

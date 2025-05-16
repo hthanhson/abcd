@@ -159,6 +159,49 @@ def clear_db():
             'error': f'Lỗi xử lý: {str(e)}'
         })
 
+def normalize_image_path(image_path):
+    """
+    Normalize an image path to make it web-friendly
+    
+    Args:
+        image_path: The raw image path from database
+        
+    Returns:
+        str: A web-friendly path that can be accessed via HTTP
+    """
+    if not image_path:
+        return "/static/images/error.png"
+        
+    # Replace backslashes with forward slashes
+    path = image_path.replace('\\', '/')
+    
+    # Handle absolute paths with drive letters (Windows-style paths)
+    if ':' in path:
+        # Extract just the filename from malformed data_test paths
+        if 'data_test' in path:
+            # Handle malformed paths like 'E:/hcsdldptNew folderabcddata_test7_0_0_20170110215648859.jpg'
+            if 'folderabcddata_test' in path:
+                parts = path.split('data_test')
+                if len(parts) > 1 and parts[1]:
+                    # Just extract the filename part
+                    return f"/data_test/{parts[1]}"
+            
+            # Normal case - just use basename
+            filename = os.path.basename(path)
+            return f"/data_test/{filename}"
+            
+        # For uploaded files
+        elif 'uploads' in path:
+            filename = os.path.basename(path)
+            return f"/uploads/{filename}"
+    
+    # Handle paths that already start with data_test but not with /
+    if 'data_test/' in path and not path.startswith('/'):
+        return f"/{path}"
+        
+    # Return the path as is if it's already web-friendly
+    return path
+
 @app.route('/search', methods=['POST'])
 def search():
     """Search for similar faces"""
@@ -197,17 +240,10 @@ def search():
         # Prepare result for the frontend
         results = []
         for i, face in enumerate(similar_faces):
-            # Chuyển đổi đường dẫn tuyệt đối thành đường dẫn tương đối 
+            # Normalize image path to make it web-friendly
             image_path = face['image_path']
-            if 'data_test/' in image_path:
-                # Lấy tên file từ đường dẫn tuyệt đối
-                filename = os.path.basename(image_path)
-                # Tạo URL tương đối
-                relative_path = f"/data_test/{filename}"
-            else:
-                # Giữ nguyên đường dẫn nếu không phải từ data_test
-                relative_path = image_path
-                
+            relative_path = normalize_image_path(image_path)
+            
             result = {
                 'image_path': relative_path,
                 'gender': utils.translate_gender(face['gender_type']),
@@ -218,11 +254,8 @@ def search():
             print(f"Result #{i+1}: {result}")
             results.append(result)
         
-        # Add query image information - sử dụng uploads cho ảnh đầu vào
-        query_relative_path = file_path
-        if file_path.startswith(app.config['UPLOAD_FOLDER']):
-            filename = os.path.basename(file_path)
-            query_relative_path = f"/uploads/{filename}"
+        # Add query image information - normalize the path
+        query_relative_path = normalize_image_path(file_path)
             
         query_info = {
             'image_path': query_relative_path,
@@ -254,20 +287,50 @@ def search():
 @app.route('/data_test/<path:filename>')
 def serve_data_test(filename):
     """Phục vụ file từ thư mục data_test"""
-    # Sử dụng đường dẫn tuyệt đối đến thư mục data_test
-    data_test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data_test')
+    try:
+        print(f"Original requested filename: {filename}")
+        
+        # Fix malformed paths that might be coming through
+        if 'folderabcddata_test' in filename:
+            parts = filename.split('data_test')
+            if len(parts) > 1 and parts[1]:
+                filename = parts[1]
+                print(f"Extracted filename from malformed path: {filename}")
+                
+        # Normalize filename by removing any path information and getting just the basename
+        # This prevents directory traversal attacks and handles incorrect path formats
+        filename = os.path.basename(filename.replace('\\', '/'))
+        
+        # Clean any URL-encoded components that might remain
+        if '%20' in filename:
+            filename = filename.replace('%20', ' ')
+        
+        print(f"Normalized filename: {filename}")
+        
+        # Absolute path to data_test directory
+        data_test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data_test')
+        
+        print(f"Looking in directory: {data_test_dir}")
+        
+        # List available files in that directory for debugging
+        files = os.listdir(data_test_dir)
+        if filename in files:
+            print(f"File {filename} found in directory listing")
+        else:
+            print(f"File {filename} NOT found in directory. Available files: {', '.join(files[:5])}...")
+        
+        # Ensure the file exists
+        full_path = os.path.join(data_test_dir, filename)
+        if os.path.exists(full_path):
+            print(f"File exists: {full_path}")
+            return send_from_directory(data_test_dir, filename)
+        else:
+            print(f"File does not exist: {full_path}")
+            return send_from_directory('static/images', 'error.png')
     
-    print(f"Requested file: {filename}")
-    print(f"Looking in directory: {data_test_dir}")
-    
-    # Kiểm tra xem file có tồn tại không
-    full_path = os.path.join(data_test_dir, filename)
-    if os.path.exists(full_path):
-        print(f"File exists: {full_path}")
-    else:
-        print(f"File does not exist: {full_path}")
-    
-    return send_from_directory(data_test_dir, filename)
+    except Exception as e:
+        print(f"Error serving data_test file: {e}")
+        return send_from_directory('static/images', 'error.png')
 
 # Đảm bảo thư mục data_test tồn tại
 os.makedirs('data_test', exist_ok=True)
@@ -295,11 +358,6 @@ def get_features_api():
             'success': False,
             'error': f'Lỗi khi lấy đặc trưng: {str(e)}'
         })
-
-@app.route('/simple')
-def simple_search():
-    """Render the simple search page"""
-    return render_template('search_simple.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)

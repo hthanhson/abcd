@@ -342,7 +342,7 @@ def detect_emotion(face_image, force_recalculate=False):
         print(f"Error in emotion detection: {e}")
         return "Neutral", 0.7
 
-def get_emotion_vector(face_image, vector_length=16):
+def get_emotion_vector(face_image, vector_length=15):
     """
     Create feature vector for emotion from face image - optimized for 224x224 images
     
@@ -351,7 +351,7 @@ def get_emotion_vector(face_image, vector_length=16):
         vector_length: Length of output vector
         
     Returns:
-        ndarray: Emotion feature vector (16-dimensional)
+        ndarray: Emotion feature vector (15-dimensional)
     """
     # Initialize feature vector
     emotion_vector = np.zeros(vector_length, dtype=float)

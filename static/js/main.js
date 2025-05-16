@@ -229,11 +229,15 @@ $(document).ready(function() {
             console.log("Query data:", data.query);
             const query = data.query;
             
+            // Fix any malformed image paths
+            const queryImagePath = query.image_path ? query.image_path.replace(/\\/g, '/') : '/static/images/error.png';
+            console.log("Query image path:", queryImagePath);
+            
             const queryHtml = `
                 <div class="mb-4">
                     <h4>Ảnh tìm kiếm</h4>
                     <div class="card">
-                        <img src="${query.image_path}" class="card-img-top" alt="Query Image" onerror="this.src='/static/images/error.png';">
+                        <img src="${queryImagePath}" class="card-img-top" alt="Query Image" onerror="this.onerror=null; this.src='/static/images/error.png'; console.error('Failed to load query image:', this.src);">
                         <div class="card-body">
                             <div>
                                 <span class="badge badge-primary">Giới tính: ${query.gender || 'Không xác định'}</span>
@@ -279,10 +283,14 @@ $(document).ready(function() {
                             (typeof result.rank === 'string' ? result.rank.replace('Top ', '') : result.rank) : 
                             (index + 1);
                         
+                        // Fix any malformed image paths
+                        const resultImagePath = result.image_path ? result.image_path.replace(/\\/g, '/') : '/static/images/error.png';
+                        console.log("Result image path:", resultImagePath);
+                        
                         const resultCard = `
                             <div class="col-md-4 mb-4">
                                 <div class="card h-100">
-                                    <img src="${result.image_path}" class="card-img-top" alt="Similar Face" onerror="this.src='/static/images/error.png';">
+                                    <img src="${resultImagePath}" class="card-img-top" alt="Similar Face" onerror="this.onerror=null; this.src='/static/images/error.png'; console.error('Failed to load result image:', this.src);">
                                     <div class="card-body">
                                         <h5 class="card-title">Kết quả #${resultRank}</h5>
                                         <div>

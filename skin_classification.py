@@ -249,7 +249,7 @@ def classify_skin_color(face_image):
         # Return default value on error - changed to White
         return "White", 0.7
 
-def get_skin_vector(face_image, vector_length=16):
+def get_skin_vector(face_image, vector_length=15):
     """
     Create feature vector for skin color from face image
     
@@ -258,7 +258,7 @@ def get_skin_vector(face_image, vector_length=16):
         vector_length: Length of output vector
         
     Returns:
-        ndarray: Skin color feature vector (16-dimensional)
+        ndarray: Skin color feature vector (15-dimensional)
     """
     # Initialize feature vector with float Python
     skin_vector = [0.0] * vector_length
@@ -353,8 +353,7 @@ def get_skin_vector(face_image, vector_length=16):
         skin_vector[10] = float(l_mean)  # Lightness (L)
         skin_vector[11] = float(b_mean_lab)  # Yellow-Blue axis (b)
         
-        # One-hot encoding for skin color type
-        # Use positions 12-15 (different from other vectors)
+        # One-hot encoding for skin color type (positions 12-15)
         skin_vector[12 + color_index] = 1.0
         
     except Exception as e:

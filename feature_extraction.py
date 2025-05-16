@@ -240,7 +240,7 @@ def create_face_encoding(face_image):
 
 def extract_features(image_path=None, image_array=None):
     """
-    Extract all features from an image and create a combined 176-dimensional vector
+    Extract all features from an image and create a combined 173-dimensional vector
     
     Args:
         image_path: Path to image file (optional if image_array is provided)
@@ -295,42 +295,42 @@ def extract_features(image_path=None, image_array=None):
         face_encoding = create_face_encoding(face_image)
         result['face_encoding'] = face_encoding
         
-        # Detect gender and create gender vector (16-dimensional) 
-        # Sử dụng face_encoding để cải thiện độ chính xác của phát hiện giới tính
-        gender, gender_confidence = detect_gender(face_image, face_encoding=face_encoding)
+        # Detect gender and create gender vector (15-dimensional) 
+        # Không sử dụng face_encoding để phát hiện giới tính
+        gender, gender_confidence = detect_gender(face_image)
         result['gender'] = gender
         result['gender_confidence'] = gender_confidence
-        gender_vector = get_gender_vector(face_image, face_encoding=face_encoding)
+        gender_vector = get_gender_vector(face_image)
         result['gender_vector'] = gender_vector
         
-        # Detect skin color and create skin vector (16-dimensional)
+        # Detect skin color and create skin vector (15-dimensional)
         skin_color, skin_confidence = classify_skin_color(face_image)
         result['skin_color'] = skin_color
         result['skin_confidence'] = skin_confidence
         skin_vector = get_skin_vector(face_image)
         result['skin_vector'] = skin_vector
         
-        # Detect emotion and create emotion vector (16-dimensional)
+        # Detect emotion and create emotion vector (15-dimensional)
         emotion, emotion_confidence = detect_emotion(face_image)
         result['emotion'] = emotion
         result['emotion_confidence'] = emotion_confidence
         emotion_vector = get_emotion_vector(face_image)
         result['emotion_vector'] = emotion_vector
         
-        # Create combined vector (176-dimensional)
-        # Concatenate face_encoding (128), gender_vector (16), skin_vector (16), emotion_vector (16)
+        # Create combined vector (173-dimensional)
+        # Concatenate face_encoding (128), gender_vector (15), skin_vector (15), emotion_vector (15)
         combined_vector = np.concatenate([face_encoding, gender_vector, skin_vector, emotion_vector])
         
-        # Ensure the vector is exactly 176 dimensions
-        if combined_vector.shape[0] != 176:
-            print(f"Warning: Combined vector has {combined_vector.shape[0]} dimensions, expected 176")
+        # Ensure the vector is exactly 173 dimensions
+        if combined_vector.shape[0] != 173:
+            print(f"Warning: Combined vector has {combined_vector.shape[0]} dimensions, expected 173")
             # Padding if necessary
-            if combined_vector.shape[0] < 176:
-                padding = np.zeros(176 - combined_vector.shape[0])
+            if combined_vector.shape[0] < 173:
+                padding = np.zeros(173 - combined_vector.shape[0])
                 combined_vector = np.concatenate([combined_vector, padding])
             # Truncating if necessary
-            elif combined_vector.shape[0] > 176:
-                combined_vector = combined_vector[:176]
+            elif combined_vector.shape[0] > 173:
+                combined_vector = combined_vector[:173]
         
         # Check for NaN values and replace with zeros
         if np.isnan(combined_vector).any():
