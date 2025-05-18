@@ -7,11 +7,11 @@ Dự án này là một hệ thống nhận dạng khuôn mặt tiên tiến s�
 ## Tính Năng Chính
 
 - **Trích Xuất Đặc Trưng Khuôn Mặt**: 
-  - Vector đặc trưng 173 chiều
+  - Vector đặc trưng 174 chiều
   - Bao gồm mã hóa khuôn mặt 128 chiều
   - Vector giới tính 15 chiều
   - Vector màu da 15 chiều
-  - Vector cảm xúc 15 chiều
+  - Vector cảm xúc 16 chiều
 
 - **Phân Tích Chi Tiết**:
   - Nhận dạng giới tính (Nam/Nữ)
@@ -93,24 +93,25 @@ project/
   - Tìm kiếm theo giới tính
   - Phân tích nhân khẩu học
 
-#### 3. Vector Cảm Xúc (15 chiều)
+#### 3. Vector Cảm Xúc (16 chiều)
 - **Mục Đích**: Đặc trưng và phân loại cảm xúc thể hiện trên khuôn mặt
 - **Chi Tiết Từng Chiều**:
-  - **Chiều 0**: Trung bình vùng mắt - Độ sáng trung bình vùng mắt (0-1)
-  - **Chiều 1**: Độ lệch chuẩn vùng mắt - Texture và chi tiết vùng mắt (0-1)
-  - **Chiều 2**: Trung bình vùng miệng - Độ sáng trung bình vùng miệng (0-1)
-  - **Chiều 3**: Độ lệch chuẩn vùng miệng - Texture và chi tiết vùng miệng (0-1)
-  - **Chiều 4**: Độ cong môi trên - Độ cong của môi trên (chuẩn hóa, giá trị âm=cong xuống)
-  - **Chiều 5**: Độ cong môi dưới - Độ cong của môi dưới (chuẩn hóa, giá trị âm=cong lên)
-  - **Chiều 6**: Gradient toàn cục - Mức độ thay đổi độ sáng toàn bộ khuôn mặt (0-1)
-  - **Chiều 7**: Độ lệch chuẩn gradient - Đo lường sự phức tạp của khuôn mặt (0-1)
-  - **Chiều 8**: Cường độ lông mày - Đo lường gradient và đặc điểm lông mày (0-1)
-  - **Chiều 9**: One-hot encoding cho cảm xúc Vui vẻ (0-7)
-  - **Chiều 10**: One-hot encoding cho cảm xúc Buồn (0-7)
-  - **Chiều 11**: One-hot encoding cho cảm xúc Giận dữ (0-7)
-  - **Chiều 12**: One-hot encoding cho cảm xúc Ngạc nhiên (0-7)
-  - **Chiều 13**: One-hot encoding cho cảm xúc Sợ hãi (0-7)
-  - **Chiều 14**: One-hot encoding cho cảm xúc Ghê tởm hoặc Trung tính (0-7)
+  - **Chiều 0**: Trung bình vùng mắt - Độ sáng trung bình của vùng mắt (chuẩn hóa về [0,1])
+  - **Chiều 1**: Độ lệch chuẩn vùng mắt - Độ biến thiên (texture/detail) vùng mắt (chuẩn hóa /100)
+  - **Chiều 2**: Trung bình vùng miệng - Độ sáng trung bình vùng miệng (chuẩn hóa về [0,1])
+  - **Chiều 3**: Độ lệch chuẩn vùng miệng - Texture/detail của vùng miệng (chuẩn hóa /100)
+  - **Chiều 4**: Độ cong môi trên - Gradient môi trên (chuẩn hóa /50, giá trị âm = cong xuống)
+  - **Chiều 5**: Độ cong môi dưới - Gradient môi dưới (chuẩn hóa /50, giá trị âm = cong lên)
+  - **Chiều 6**: Gradient toàn cục - Độ mạnh trung bình của gradient toàn khuôn mặt (chuẩn hóa /150)
+  - **Chiều 7**: Độ lệch chuẩn gradient - Biến thiên của gradient (phức tạp chi tiết khuôn mặt, chuẩn hóa /150)
+  - **Chiều 8**: Cường độ lông mày - Mức độ gradient tại vùng lông mày (biểu hiện cảm xúc như giận, sợ, v.v.)
+  - **Chiều 9**: One-hot encoding cho cảm xúc Vui vẻ
+  - **Chiều 10**: One-hot encoding cho cảm xúc Buồn
+  - **Chiều 11**: One-hot encoding cho cảm xúc Giận dữ
+  - **Chiều 12**: One-hot encoding cho cảm xúc Ngạc nhiên
+  - **Chiều 13**: One-hot encoding cho cảm xúc Sợ hãi
+  - **Chiều 14**: One-hot encoding cho cảm xúc Ghê tởm
+  - **Chiều 15**: One-hot encoding cho cảm xúc Trung tính
 - **Ứng Dụng**:
   - Nhận dạng biểu cảm khuôn mặt
   - Phân tích tâm lý từ hình ảnh
@@ -139,11 +140,11 @@ project/
   - Điều chỉnh tông màu tự động
   - Nghiên cứu nhân chủng học
 
-#### 5. Vector Tổng Hợp (173 chiều)
+#### 5. Vector Tổng Hợp (174 chiều)
 - **Mục Đích**: Tạo biểu diễn toàn diện về khuôn mặt bao gồm tất cả các đặc trưng
 - **Chi Tiết Kỹ Thuật**:
   - Kết hợp 4 vector thành 1 vector duy nhất
-  - Bao gồm: Vector Mã hóa (128) + Vector Giới tính (15) + Vector Cảm xúc (15) + Vector Màu da (15)
+  - Bao gồm: Vector Mã hóa (128) + Vector Giới tính (15) + Vector Cảm xúc (16) + Vector Màu da (15)
 - **Ứng Dụng**:
   - Tìm kiếm khuôn mặt tương tự toàn diện
   - Phân tích đa chiều

@@ -342,7 +342,7 @@ def detect_emotion(face_image, force_recalculate=False):
         print(f"Error in emotion detection: {e}")
         return "Neutral", 0.7
 
-def get_emotion_vector(face_image, vector_length=15):
+def get_emotion_vector(face_image, vector_length=16):
     """
     Create feature vector for emotion from face image - optimized for 224x224 images
     
@@ -351,7 +351,7 @@ def get_emotion_vector(face_image, vector_length=15):
         vector_length: Length of output vector
         
     Returns:
-        ndarray: Emotion feature vector (15-dimensional)
+        ndarray: Emotion feature vector (16-dimensional)
     """
     # Initialize feature vector
     emotion_vector = np.zeros(vector_length, dtype=float)
@@ -457,11 +457,14 @@ def get_emotion_vector(face_image, vector_length=15):
         
         # Fill the vector with the extracted features
         for i, feature in enumerate(features):
-            if i < 10:  # Use first 10 positions for features (we added mouth curve features)
+            if i < 9:  # Use first 9 positions for features
                 emotion_vector[i] = float(feature)
         
-        # One-hot encoding for emotion type (positions 8-15)
-        emotion_vector[8 + emotion_index] = 1.0
+        # One-hot encoding for emotion type (positions 9-16)
+        # Thể hiện cảm xúc từ vui vẻ đến trung tính
+        emotion_order = ["Happy", "Sad", "Angry", "Surprised", "Fearful", "Disgusted", "Neutral", "Unknown"]
+        emotion_index = emotion_mapping.get(emotion, 7)  # Default to unknown
+        emotion_vector[9 + emotion_index] = 1.0
         
         # Check for NaN values
         emotion_vector = np.nan_to_num(emotion_vector)
