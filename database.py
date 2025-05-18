@@ -468,7 +468,7 @@ def build_database(folder_path):
 
 def find_similar_faces(query_features, top_n=3, filters=None):
     """
-    Tìm kiếm khuôn mặt tương tự trong cơ sở dữ liệu chỉ dựa trên vector 173 chiều kết hợp
+    Tìm kiếm khuôn mặt tương tự trong cơ sở dữ liệu chỉ dựa trên vector 174 chiều kết hợp
     
     Args:
         query_features: Đặc trưng của ảnh truy vấn
@@ -573,11 +573,11 @@ def find_similar_faces(query_features, top_n=3, filters=None):
         print(f"Found {len(valid_results)} valid vectors.")
         
         # Compute distance between query vector and all database vectors
-        # Chỉ sử dụng vector 173 chiều kết hợp (combined_vector)
+        # Chỉ sử dụng vector 174 chiều kết hợp (combined_vector)
         distances = []
         query_vector = query_features['combined_vector']
         
-        print("Computing distances using 173-dimensional combined vector...")
+        print("Computing distances using 174-dimensional combined vector...")
         for i, result in enumerate(valid_results):
             # Skip comparing with same image if it exists in database
             if 'image_path' in query_features and query_features['image_path'] == result['image_path']:
@@ -585,7 +585,7 @@ def find_similar_faces(query_features, top_n=3, filters=None):
                 continue
             
             try:
-                # Sử dụng trực tiếp khoảng cách Euclidean giữa hai vector 173 chiều
+                # Sử dụng trực tiếp khoảng cách Euclidean giữa hai vector 174 chiều
                 distance = np.linalg.norm(query_vector - result['combined_vector'])
                 
                 # Tính similarity dựa trên khoảng cách Euclidean
